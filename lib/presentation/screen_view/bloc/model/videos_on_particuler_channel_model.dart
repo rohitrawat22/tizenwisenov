@@ -59,7 +59,8 @@ class VideosOnPerticulerChannelModel {
     tvArchive = json['tv_archive'];
     directSource = json['direct_source'];
     tvArchiveDuration = json['tv_archive_duration'];
-    containerExtension = json['container_extension'] ?? json['containerExtension'];
+    containerExtension =
+        json['container_extension'] ?? json['containerExtension'];
   }
 
   Map<String, dynamic> toJson() {

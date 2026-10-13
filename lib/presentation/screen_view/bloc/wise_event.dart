@@ -33,7 +33,11 @@ class TogglePlaylistLockEvent extends WiseEvent {
   final String playlistId;
   final bool isLocked;
   final String? pin;
-  TogglePlaylistLockEvent({required this.playlistId, required this.isLocked, this.pin});
+  TogglePlaylistLockEvent({
+    required this.playlistId,
+    required this.isLocked,
+    this.pin,
+  });
 }
 
 class SetDevicePinEvent extends WiseEvent {
@@ -51,6 +55,7 @@ class ChangePinEvent extends WiseEvent {
   final String newPin;
   ChangePinEvent({required this.oldPin, required this.newPin});
 }
+
 class ChannelEvent extends WiseEvent {
   final String url;
   ChannelEvent({required this.url});

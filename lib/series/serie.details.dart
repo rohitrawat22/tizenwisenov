@@ -8,7 +8,11 @@ import 'package:wiseplayertizen/core/widgets/cached_image.dart';
 import 'package:wiseplayertizen/presentation/screen_view/bloc/model/videos_on_particuler_channel_model.dart';
 import 'package:wiseplayertizen/presentation/screen_view/web/screens/stream_player.dart';
 import 'package:wiseplayertizen/series/serie.api.serivces.dart';
-import 'package:wiseplayertizen/series/series.model.dart';
+import 'package:wiseplayertizen/series/series.model.dart'; // lib/series/serie.details.dart
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ─────────────────────────────────────────────────────────────────────────
 // DEBUG SWITCH — keep FALSE for release builds. Flip to true only when you
@@ -547,7 +551,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen>
   VideosOnPerticulerChannelModel _buildVideoInfoFromEpisode(
     SeriesEpisode episode,
   ) {
-    final intId = int.tryParse(episode.id ?? '');
+    final intId = episode.id;
     return VideosOnPerticulerChannelModel(
       name: episode.displayTitle,
       streamId: intId,

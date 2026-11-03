@@ -55,11 +55,8 @@ class _ShowPlaylistVideoInListViewState
   }
 
   Future<void> getFavData() async {
-    debugPrint("fdsfsd");
-    final data = HiveService.getFavList();
-    setState(() {
-      favList = data;
-    });
+    final playlistId = widget.playListId ?? "";
+    context.read<WiseBloc>().add(LoadFavoritesEvent(playlistId: playlistId));
   }
 
   @override
@@ -73,15 +70,30 @@ class _ShowPlaylistVideoInListViewState
       // previous.videoOnParticulerChannelList !=
       //     current.videoOnParticulerChannelList,
       builder: (context, state) {
-        return state.filterVideoOnParticulerChannelList.isEmpty
+        List<VideosOnPerticulerChannelModel> videos =
+            state.selectedChannel?.categoryId == 'favorites_category'
+            ? state.favorites
+                  .map(
+                    (fav) => VideosOnPerticulerChannelModel(
+                      streamId: fav.id,
+                      name: fav.title,
+                      streamIcon: fav.photoImage,
+                      streamType: fav.streamType,
+                      categoryId: fav.playlistId,
+                      containerExtension: fav.containerExtension,
+                    ),
+                  )
+                  .toList()
+            : state.filterVideoOnParticulerChannelList;
+
+        return videos.isEmpty
             ? Center(child: CText("Not Found"))
             : ListView.builder(
                 itemExtent: 115, // O(1) scroll calculation
-                itemCount: state.filterVideoOnParticulerChannelList.length,
+                itemCount: videos.length,
 
                 itemBuilder: (context, index) {
-                  VideosOnPerticulerChannelModel data =
-                      state.filterVideoOnParticulerChannelList[index];
+                  VideosOnPerticulerChannelModel data = videos[index];
                   // bool isThisVideoWatching =
                   //     data.categoryId == state.selectedVideo?.categoryId;
                   bool isThisVideoWatching =
@@ -92,7 +104,7 @@ class _ShowPlaylistVideoInListViewState
                     data: data,
                     isThisVideoWatching: isThisVideoWatching,
                     urlTillChannel: widget.urlTillChannel,
-                    categoryId: state.selectedChannel?.categoryId?.toString(),
+                    playListId: widget.playListId,
                     isSeries: widget.isSeries,
                     isMovies: widget.isMovies ?? false,
                     onTap: () {
@@ -102,7 +114,7 @@ class _ShowPlaylistVideoInListViewState
                       bool usedDirectUrl = false;
                       if (widget.isLiveTv &&
                           widget.playListId != null &&
-                          (data.streamId ?? 0) > 0) {
+                          (int.parse(data.streamId.toString()) ?? 0) > 0) {
                         final playlist = state.playLists
                             .cast<GetplayListModel?>()
                             .firstWhere(
@@ -266,74 +278,69 @@ class _ShowPlaylistVideoInListViewState
   }
 
   bool isFav(String streamId) {
-    return HiveService.getFavList().any((fav) => fav.id == streamId);
+    return context.read<WiseBloc>().state.favorites.any(
+      (fav) => fav.id == streamId,
+    );
   }
 }
 
-class _FavButton extends StatefulWidget {
+class _FavButton extends StatelessWidget {
   final VideosOnPerticulerChannelModel data;
-  final String? categoryId;
+  final String? playListId;
   final String urlTillChannel;
   final bool isSeries;
   final bool isMovies;
 
   const _FavButton({
     required this.data,
-    required this.categoryId,
+    required this.playListId,
     required this.urlTillChannel,
     required this.isSeries,
     required this.isMovies,
   });
 
   @override
-  State<_FavButton> createState() => _FavButtonState();
-}
-
-class _FavButtonState extends State<_FavButton> {
-  late bool _isFav;
-
-  @override
-  void initState() {
-    super.initState();
-    _isFav = HiveService.getFavList().any(
-      (fav) => fav.id == widget.data.streamId.toString(),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: () async {
-        FavModel fav = FavModel(
-          id: widget.data.streamId.toString(),
-          url: "",
-          photoImage: widget.data.streamIcon ?? "",
-          title: widget.data.name ?? "N/A",
-          categoryId: widget.categoryId,
-          urlTillChannel: widget.urlTillChannel,
-          isLive: widget.isSeries == false && widget.isMovies == false
-              ? true
-              : false,
-          containerExtension: widget.data.containerExtension,
+    return BlocBuilder<WiseBloc, WiseState>(
+      buildWhen: (p, c) => p.favorites != c.favorites,
+      builder: (context, state) {
+        final isFav = state.favorites.any(
+          (fav) => fav.id == data.streamId.toString(),
         );
 
-        if (_isFav) {
-          await HiveService.deleteFav(fav.id);
-        } else {
-          await HiveService.addFav(fav);
-        }
+        return IconButton(
+          onPressed: () {
+            final playlistId = playListId ?? "";
+            final isLive = isSeries == false && isMovies == false;
+            final streamType = isLive ? 'LIVE' : (isSeries ? 'SERIES' : 'VOD');
 
-        if (mounted) {
-          setState(() {
-            _isFav = !_isFav;
-          });
-        }
+            if (isFav) {
+              context.read<WiseBloc>().add(
+                RemoveFavoriteEvent(
+                  playlistId: playlistId,
+                  streamId: data.streamId.toString(),
+                  streamType: streamType,
+                ),
+              );
+            } else {
+              context.read<WiseBloc>().add(
+                AddFavoriteEvent(
+                  playlistId: playlistId,
+                  streamId: data.streamId.toString(),
+                  streamType: streamType,
+                  name: data.name ?? "N/A",
+                  streamIcon: data.streamIcon ?? "",
+                ),
+              );
+            }
+          },
+          icon: Icon(
+            isFav ? Icons.favorite : Icons.favorite_border,
+            color: isFav ? AppColor.coralRed : Colors.white.withOpacity(0.5),
+            size: 26,
+          ),
+        );
       },
-      icon: Icon(
-        _isFav ? Icons.favorite : Icons.favorite_border,
-        color: _isFav ? AppColor.coralRed : Colors.white.withOpacity(0.5),
-        size: 26,
-      ),
     );
   }
 }
@@ -381,7 +388,7 @@ class _ChannelListItem extends StatelessWidget {
   final bool isThisVideoWatching;
   final VoidCallback onTap;
   final String urlTillChannel;
-  final String? categoryId;
+  final String? playListId;
   final bool isSeries;
   final bool isMovies;
 
@@ -391,7 +398,7 @@ class _ChannelListItem extends StatelessWidget {
     required this.isThisVideoWatching,
     required this.onTap,
     required this.urlTillChannel,
-    required this.categoryId,
+    required this.playListId,
     required this.isSeries,
     required this.isMovies,
   });
@@ -487,7 +494,7 @@ class _ChannelListItem extends StatelessWidget {
                     _CatchUpButton(data: data, urlTillChannel: urlTillChannel),
                   _FavButton(
                     data: data,
-                    categoryId: categoryId,
+                    playListId: playListId,
                     urlTillChannel: urlTillChannel,
                     isSeries: isSeries,
                     isMovies: isMovies,

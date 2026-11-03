@@ -40,6 +40,20 @@ class TogglePlaylistLockEvent extends WiseEvent {
   });
 }
 
+class VerifyPlaylistPinEvent extends WiseEvent {
+  final String playlistId;
+  final String pin;
+  final Function(GetplayListModel unlockedPlaylist)? onSuccess;
+  final Function(String errorMessage)? onError;
+
+  VerifyPlaylistPinEvent({
+    required this.playlistId,
+    required this.pin,
+    this.onSuccess,
+    this.onError,
+  });
+}
+
 class SetDevicePinEvent extends WiseEvent {
   final String pin;
   SetDevicePinEvent({required this.pin});
@@ -54,6 +68,13 @@ class ChangePinEvent extends WiseEvent {
   final String oldPin;
   final String newPin;
   ChangePinEvent({required this.oldPin, required this.newPin});
+}
+
+class VerifyDevicePinEvent extends WiseEvent {
+  final String pin;
+  final VoidCallback? onSuccess;
+  final Function(String errorMessage)? onError;
+  VerifyDevicePinEvent({required this.pin, this.onSuccess, this.onError});
 }
 
 class ChannelEvent extends WiseEvent {
@@ -161,4 +182,56 @@ class SelectedVideoEvent extends WiseEvent {
 class ChangeLanguageEvent extends WiseEvent {
   final String localWord;
   ChangeLanguageEvent({required this.localWord});
+}
+
+// ── Favorites API Events ────────────────────────────────────────────────────
+
+class LoadFavoritesEvent extends WiseEvent {
+  final String playlistId;
+  final String? streamType; // e.g. 'LIVE', 'VOD', 'SERIES'
+  LoadFavoritesEvent({required this.playlistId, this.streamType});
+}
+
+class AddFavoriteEvent extends WiseEvent {
+  final String playlistId;
+  final String streamId;
+  final String streamType; // "LIVE", "VOD", "SERIES"
+  final String? name;
+  final String? streamIcon;
+  AddFavoriteEvent({
+    required this.playlistId,
+    required this.streamId,
+    required this.streamType,
+    this.name,
+    this.streamIcon,
+  });
+}
+
+class RemoveFavoriteEvent extends WiseEvent {
+  final String playlistId;
+  final String streamId;
+  final String streamType;
+  RemoveFavoriteEvent({
+    required this.playlistId,
+    required this.streamId,
+    required this.streamType,
+  });
+}
+
+class ClearAllFavoritesEvent extends WiseEvent {
+  final String playlistId;
+  ClearAllFavoritesEvent({required this.playlistId});
+}
+
+class PlayFavoriteEvent extends WiseEvent {
+  final String playlistId;
+  final String streamId;
+  final String streamType; // "LIVE", "VOD", or "SERIES"
+  final String? extension;
+  PlayFavoriteEvent({
+    required this.playlistId,
+    required this.streamId,
+    required this.streamType,
+    this.extension,
+  });
 }

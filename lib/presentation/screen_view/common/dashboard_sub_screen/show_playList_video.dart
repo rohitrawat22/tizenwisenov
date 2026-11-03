@@ -8,6 +8,7 @@ import 'package:wiseplayertizen/core/colors/colors.dart';
 import 'package:wiseplayertizen/core/utils/dpad_focus_graph.dart';
 import 'package:wiseplayertizen/core/widgets/catch_up_picker_dialog.dart';
 import 'package:wiseplayertizen/core/widgets/custom_text.dart';
+import 'package:wiseplayertizen/presentation/screen_view/bloc/model/get_playList_model.dart';
 import 'package:wiseplayertizen/presentation/screen_view/bloc/model/videos_on_particuler_channel_model.dart';
 import 'package:wiseplayertizen/presentation/screen_view/bloc/wise_bloc.dart';
 import 'package:wiseplayertizen/data/local_storage/hive_service.dart';
@@ -85,14 +86,14 @@ class _ShowPlaylistVideoInGridState extends State<ShowPlaylistVideoInGrid> {
       builder: (context, state) {
         List<VideosOnPerticulerChannelModel> videos =
             state.selectedChannel?.categoryId == 'favorites_category'
-            ? HiveService.getFavList()
+            ? state.favorites
                   .map(
                     (fav) => VideosOnPerticulerChannelModel(
-                      streamId: int.tryParse(fav.id) ?? 0,
+                      streamId: fav.id,
                       name: fav.title,
                       streamIcon: fav.photoImage,
-                      streamType: fav.isLive ? 'live' : 'movie',
-                      categoryId: fav.categoryId,
+                      streamType: fav.streamType,
+                      categoryId: fav.playlistId,
                       containerExtension: fav.containerExtension,
                     ),
                   )
@@ -137,8 +138,8 @@ class _ShowPlaylistVideoInGridState extends State<ShowPlaylistVideoInGrid> {
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            maxCrossAxisExtent: 160,
-            childAspectRatio: 0.62,
+            maxCrossAxisExtent: 110,
+            childAspectRatio: 0.65,
           ),
           itemBuilder: (context, index) {
             final data = videos[index];
@@ -152,11 +153,12 @@ class _ShowPlaylistVideoInGridState extends State<ShowPlaylistVideoInGrid> {
               }
               lastTapTime = DateTime.now();
 
-              log('stream tap data is -----> ${data..toString()}');
+              log('stream tap data is ------> ${data..toString()}');
               if (state.status != Status.loading && !widget.isSeries) {
-                // Fire SelectedVideoEvent FIRST so the highlight updates
-                // before loading starts. GetVideoUrlEvent then sets
-                // Status.loading and the loader stays up until URL arrives.
+                // Clear stale videoUrl/isVideoLoaded from the previous channel.
+                // Without this, the BlocListener fires on SelectedVideoEvent
+                // (success + old videoUrl still in state) causing double-navigation.
+                BlocProvider.of<WiseBloc>(context).add(ResetVideoUrlEvent());
                 BlocProvider.of<WiseBloc>(context)
                     .add(SelectedVideoEvent(selectedVideo: data));
                 BlocProvider.of<WiseBloc>(context).add(
@@ -190,6 +192,7 @@ class _ShowPlaylistVideoInGridState extends State<ShowPlaylistVideoInGrid> {
             return _StreamCard(
               data: data,
               urlTillChannel: widget.urlTillChannel,
+              playListId: widget.playListId,
               isMovies: widget.isMovies,
               isSeries: widget.isSeries,
               onPlay: handlePlay,
@@ -230,6 +233,7 @@ class _ShowPlaylistVideoInGridState extends State<ShowPlaylistVideoInGrid> {
 class _StreamCard extends StatefulWidget {
   final VideosOnPerticulerChannelModel data;
   final String urlTillChannel;
+  final String playListId;
   final bool? isMovies;
   final bool isSeries;
   final VoidCallback onPlay;
@@ -239,6 +243,7 @@ class _StreamCard extends StatefulWidget {
   const _StreamCard({
     required this.data,
     required this.urlTillChannel,
+    required this.playListId,
     required this.isMovies,
     required this.isSeries,
     required this.onPlay,
@@ -252,7 +257,6 @@ class _StreamCard extends StatefulWidget {
 
 class _StreamCardState extends State<_StreamCard>
     with SingleTickerProviderStateMixin {
-  bool _isFav = false;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
@@ -264,9 +268,6 @@ class _StreamCardState extends State<_StreamCard>
   @override
   void initState() {
     super.initState();
-    _isFav = HiveService.getFavList().any(
-      (fav) => fav.id == widget.data.streamId.toString(),
-    );
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 150),
@@ -313,35 +314,41 @@ class _StreamCardState extends State<_StreamCard>
 
   Future<void> _toggleFav() async {
     _pulseController.forward(from: 0);
-    if (_isFav) {
-      await HiveService.deleteFav(widget.data.streamId.toString());
-    } else {
-      await HiveService.addFav(
-        FavModel(
-          id: widget.data.streamId.toString(),
-          url: '',
-          photoImage: widget.data.streamIcon ?? '',
-          title: widget.data.name ?? '',
-          categoryId:
-              widget.data.categoryId ??
-              context.read<WiseBloc>().state.selectedChannel?.categoryId ??
-              "",
-          urlTillChannel: widget.urlTillChannel,
-          isLive: widget.isMovies == false && widget.isSeries == false,
-          containerExtension: widget.data.containerExtension,
+    final playlistId = widget.playListId;
+    final isLive = widget.isMovies == false && widget.isSeries == false;
+    final streamType = isLive ? 'LIVE' : (widget.isSeries ? 'SERIES' : 'VOD');
+
+    final isFav = context.read<WiseBloc>().state.favorites.any(
+      (f) => f.id == widget.data.streamId.toString(),
+    );
+
+    if (isFav) {
+      context.read<WiseBloc>().add(
+        RemoveFavoriteEvent(
+          playlistId: playlistId,
+          streamId: widget.data.streamId.toString(),
+          streamType: streamType,
         ),
       );
-    }
-    if (mounted) {
-      setState(() {
-        _isFav = !_isFav;
-      });
+    } else {
+      context.read<WiseBloc>().add(
+        AddFavoriteEvent(
+          playlistId: playlistId,
+          streamId: widget.data.streamId.toString(),
+          streamType: streamType,
+          name: widget.data.name,
+          streamIcon: widget.data.streamIcon,
+        ),
+      );
     }
     widget.onFavToggle();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isFav = context.watch<WiseBloc>().state.favorites.any(
+      (f) => f.id == widget.data.streamId.toString(),
+    );
     final isCardFocused = _cardNode.hasFocus;
     final isCatchUpFocused = _catchUpNode.hasFocus;
     final isFavFocused = _favNode.hasFocus;
@@ -470,14 +477,18 @@ class _StreamCardState extends State<_StreamCard>
               ),
 
             // ── Favourite button ───────────────────────────────────────
-            Positioned(top: 6, right: 6, child: _buildFavButton(isFavFocused)),
+            Positioned(
+              top: 6,
+              right: 6,
+              child: _buildFavButton(isFavFocused, isFav),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFavButton(bool isFavFocused) {
+  Widget _buildFavButton(bool isFavFocused, bool isFav) {
     return GestureDetector(
       onTap: _toggleFav,
       child: Focus(
@@ -519,7 +530,7 @@ class _StreamCardState extends State<_StreamCard>
             border: Border.all(
               color: isFavFocused
                   ? Colors.white
-                  : (_isFav
+                  : (isFav
                         ? AppColor.accentRed.withOpacity(0.7)
                         : Colors.white24),
               width: isFavFocused ? 2.0 : 1.0,
@@ -532,7 +543,7 @@ class _StreamCardState extends State<_StreamCard>
                       spreadRadius: 1,
                     ),
                   ]
-                : (_isFav
+                : (isFav
                       ? [
                           BoxShadow(
                             color: AppColor.accentRed.withOpacity(0.25),
@@ -547,10 +558,10 @@ class _StreamCardState extends State<_StreamCard>
               ScaleTransition(
                 scale: _pulseAnimation,
                 child: Icon(
-                  _isFav
+                  isFav
                       ? Icons.favorite_rounded
                       : Icons.favorite_border_rounded,
-                  color: _isFav
+                  color: isFav
                       ? (isFavFocused ? Colors.white : AppColor.accentRed)
                       : Colors.white70,
                   size: isFavFocused ? 24 : 20,
@@ -559,7 +570,7 @@ class _StreamCardState extends State<_StreamCard>
               if (isFavFocused) ...[
                 const SizedBox(width: 5),
                 Text(
-                  _isFav ? 'Saved' : 'Save',
+                  isFav ? 'Saved' : 'Save',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,

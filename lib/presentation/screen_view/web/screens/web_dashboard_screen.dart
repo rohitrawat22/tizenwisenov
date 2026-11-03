@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wiseplayertizen/core/colors/colors.dart';
-
 import 'package:wiseplayertizen/core/routes/routes_path.dart';
 import 'package:wiseplayertizen/core/utils/breakpoints.dart';
 import 'package:wiseplayertizen/core/utils/loader.dart';
@@ -14,10 +13,9 @@ import 'package:wiseplayertizen/core/utils/message_dialog.dart';
 import 'package:wiseplayertizen/core/utils/snackbar.dart';
 import 'package:wiseplayertizen/core/widgets/custom_textFormFiled.dart';
 import 'package:wiseplayertizen/presentation/screen_view/bloc/api_services/api_services.dart';
-
 import 'package:wiseplayertizen/presentation/screen_view/bloc/wise_bloc.dart';
+import 'package:wiseplayertizen/presentation/screen_view/common/content_option_tv/content_option_tv.dart';
 import 'package:wiseplayertizen/presentation/screen_view/web/screens/stream_player.dart';
-
 import 'package:wiseplayertizen/core/widgets/geo_location_banner.dart';
 import 'package:wiseplayertizen/series/serie.details.dart';
 
@@ -124,16 +122,20 @@ class _WebDashboardScreenState extends State<WebDashboardScreen> {
     });
   }
 
-  Future<void> getProgramData({
-    required String streaID,
-    required String videoUrl,
-  }) async {
+  void getProgramData({required String streaID, required String videoUrl}) {
     if (widget.isLiveTv) {
-      programList = await getChannelEpgPrograms(
-        playlistId: widget.playListId,
-        channelId: streaID,
-      );
+      // Immediately open the video player without waiting for EPG JSON
       _openVideoPlayer(videoUrl: videoUrl, streaID: streaID, resumeSecond: 0);
+      // Fetch EPG non-blockingly in background
+      // getChannelEpgPrograms(playlistId: widget.playListId, channelId: streaID)
+      //     .then((epg) {
+      //       if (mounted) {
+      //         programList = epg;
+      //       }
+      //     })
+      //     .catchError((e) {
+      //       debugPrint("⚠️ EPG background fetch error: $e");
+      //     });
     }
   }
 
@@ -234,9 +236,20 @@ class _WebDashboardScreenState extends State<WebDashboardScreen> {
       return;
     }
 
-    final isCatchUp = BlocProvider.of<WiseBloc>(context)
-        .state
-        .isCatchUpPlayback;
+    final wiseBloc = BlocProvider.of<WiseBloc>(context);
+    final wiseState = wiseBloc.state;
+
+    final channels =
+        (wiseState.filterVideoOnParticulerChannelList.isNotEmpty ||
+            (wiseState.selectedChannel != null &&
+                wiseState.selectedChannel!.categoryName == 'All'))
+        ? wiseState.filterVideoOnParticulerChannelList
+        : wiseState.videoOnParticulerChannelList;
+
+    int initialIndex = channels.indexWhere(
+      (c) => c.streamId?.toString() == streaID,
+    );
+    if (initialIndex < 0) initialIndex = 0;
 
     GoRouter.of(context).push(
       VideoPlayerScreen.routeName,
@@ -245,10 +258,12 @@ class _WebDashboardScreenState extends State<WebDashboardScreen> {
         "streaID": streaID,
         "videoUrl": videoUrl,
         "resumeSecond": resumeSecond,
-        "videoInfo": BlocProvider.of<WiseBloc>(context).state.selectedVideo,
+        "videoInfo": wiseState.selectedVideo,
         "isLiveTv": widget.isLiveTv,
         "programList": programList,
         "streamType": "VOD",
+        "channelList": channels,
+        "initialChannelIndex": initialIndex,
       },
     );
 
@@ -262,6 +277,7 @@ class _WebDashboardScreenState extends State<WebDashboardScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.black,
         elevation: 0,
         centerTitle: true,
@@ -441,9 +457,16 @@ class _WebDashboardScreenState extends State<WebDashboardScreen> {
               content: Text(state.errorMessage),
               context: context,
               onTap: () {
+                print("fdsdfsdfsd${Status.loading}");
+                print("fdsdfsdfsd${Status}");
                 if (Navigator.of(context).canPop()) {
                   Navigator.of(context).pop();
                 }
+                Navigator.of(context).pop();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => CategoryPage()),
+                );
               },
               okk: 'OK',
             );
@@ -470,8 +493,7 @@ class _WebDashboardScreenState extends State<WebDashboardScreen> {
               // print(
               //   'Video URL ready → navigating to player: ${state.selectedVideo}',
               // );
-              final int resumeSeconds =
-                  int.tryParse(state.resumeSeconds?.toString() ?? '0') ?? 0;
+              final int resumeSeconds = int.tryParse(state.resumeSeconds) ?? 0;
 
               _navigateToPlayer(
                 state.videoUrl,
@@ -518,7 +540,12 @@ class _WebDashboardScreenState extends State<WebDashboardScreen> {
                                 ),
                               ),
                             ),
-                          Expanded(child: Channels(urlTillChannel: finalUrl)),
+                          Expanded(
+                            child: Channels(
+                              urlTillChannel: finalUrl,
+                              playListId: widget.playListId,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -570,39 +597,4 @@ class _WebDashboardScreenState extends State<WebDashboardScreen> {
       ),
     );
   }
-}
-
-ApiService apiService = ApiService();
-Future<List<EpgProgramModel>> getChannelEpgPrograms({
-  required String playlistId,
-  required String channelId,
-}) async {
-  final endpoint =
-      '/api/catchup/epg?playlistId=$playlistId&channelId=$channelId';
-
-  final result = await apiService.hitGetApi(endpoint: endpoint);
-
-  if (!result.isSuccess) {
-    return [];
-  }
-
-  if (result.data == null) {
-    return [];
-  }
-
-  final responseData = result.data as Map<String, dynamic>;
-
-  final programsJson = responseData['programs'] as List?;
-
-  if (programsJson == null) {
-    return [];
-  }
-
-  final programs = programsJson.map((p) {
-    final program = EpgProgramModel.fromJson(p);
-
-    return program;
-  }).toList();
-
-  return programs;
 }

@@ -84,24 +84,24 @@ final GoRouter router = GoRouter(
       },
     ),
 
-    GoRoute(
-      path: AppRoutes.mobileDashboard,
-      builder: (context, state) {
-        final data = state.extra as Map<String, dynamic>;
-        final String playListId = data['playListId'];
-        final bool isLiveTv = data['isLiveTv'];
-        final bool isMovies = data['isMovies'];
-        final bool isSeries = data['isSeries'];
-        final bool isRadio = data['isRadio'];
-        return MoblieDashboardScreen(
-          playListId: playListId,
-          isLiveTv: isLiveTv,
-          isMovies: isMovies,
-          isSeries: isSeries,
-          isRadio: isRadio,
-        );
-      },
-    ),
+    // GoRoute(
+    //   path: AppRoutes.mobileDashboard,
+    //   builder: (context, state) {
+    //     final data = state.extra as Map<String, dynamic>;
+    //     final String playListId = data['playListId'];
+    //     final bool isLiveTv = data['isLiveTv'];
+    //     final bool isMovies = data['isMovies'];
+    //     final bool isSeries = data['isSeries'];
+    //     final bool isRadio = data['isRadio'];
+    //     return MoblieDashboardScreen(
+    //       playListId: playListId,
+    //       isLiveTv: isLiveTv,
+    //       isMovies: isMovies,
+    //       isSeries: isSeries,
+    //       isRadio: isRadio,
+    //     );
+    //   },
+    // ),
     GoRoute(
       path: AppRoutes.loginWithMac,
       builder: (context, state) {

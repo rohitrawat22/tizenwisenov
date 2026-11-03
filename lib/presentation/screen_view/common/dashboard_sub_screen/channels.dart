@@ -6,12 +6,18 @@ import 'package:wiseplayertizen/core/widgets/custom_text.dart';
 import 'package:wiseplayertizen/presentation/screen_view/bloc/model/channel_model.dart';
 import 'package:wiseplayertizen/presentation/screen_view/bloc/wise_bloc.dart';
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 class Channels extends StatefulWidget {
   final bool isForMobile;
   final String urlTillChannel;
+  final String playListId;
   const Channels({
     super.key,
     required this.urlTillChannel,
+    required this.playListId,
     this.isForMobile = false,
   });
 
@@ -203,7 +209,12 @@ class _ChannelsState extends State<Channels> {
 
                                     if (data.categoryId ==
                                         "favorites_category") {
-                                      // Pre-set selection of Favourites
+                                      // Use the selected playlist ID directly
+                                      bloc.add(
+                                        LoadFavoritesEvent(
+                                          playlistId: widget.playListId,
+                                        ),
+                                      );
                                       bloc.add(
                                         SelectedChannelEvent(
                                           selectedChannel: data,

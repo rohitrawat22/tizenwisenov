@@ -2,7 +2,7 @@ class VideosOnPerticulerChannelModel {
   int? num;
   String? name;
   String? streamType;
-  int? streamId;
+  String? streamId;
   String? streamIcon;
   String? epgChannelId;
   String? added;
@@ -33,7 +33,7 @@ class VideosOnPerticulerChannelModel {
       num: 0,
       name: '',
       streamType: '',
-      streamId: 0,
+      streamId: "0",
       streamIcon: '',
       epgChannelId: '',
       added: '',
@@ -47,20 +47,26 @@ class VideosOnPerticulerChannelModel {
   }
 
   VideosOnPerticulerChannelModel.fromJson(Map<String, dynamic> json) {
-    num = json['num'];
-    name = json['name'];
-    streamType = json['stream_type'];
-    streamId = json['stream_id'];
-    streamIcon = json['stream_icon'];
-    epgChannelId = json['epg_channel_id'];
-    added = json['added'];
-    categoryId = json['category_id'];
-    customSid = json['custom_sid'];
-    tvArchive = json['tv_archive'];
-    directSource = json['direct_source'];
-    tvArchiveDuration = json['tv_archive_duration'];
+    num = json['num'] is int
+        ? json['num']
+        : int.tryParse(json['num']?.toString() ?? '');
+    name = json['name']?.toString();
+    streamType = json['stream_type']?.toString();
+    streamId = json['stream_id'].toString();
+    streamIcon = json['stream_icon']?.toString();
+    epgChannelId = json['epg_channel_id']?.toString();
+    added = json['added']?.toString();
+    categoryId = json['category_id']?.toString();
+    customSid = json['custom_sid']?.toString();
+    tvArchive = json['tv_archive'] is int
+        ? json['tv_archive']
+        : int.tryParse(json['tv_archive']?.toString() ?? '');
+    directSource = json['direct_source']?.toString();
+    tvArchiveDuration = json['tv_archive_duration'] is int
+        ? json['tv_archive_duration']
+        : int.tryParse(json['tv_archive_duration']?.toString() ?? '');
     containerExtension =
-        json['container_extension'] ?? json['containerExtension'];
+        (json['container_extension'] ?? json['containerExtension'])?.toString();
   }
 
   Map<String, dynamic> toJson() {

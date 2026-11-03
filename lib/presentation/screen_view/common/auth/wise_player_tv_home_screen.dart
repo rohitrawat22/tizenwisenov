@@ -276,100 +276,100 @@ class _WisePlayerTVHomeScreenState extends State<WisePlayerTVHomeScreen>
     if (mounted) setState(() {});
   }
 
-  Future<void> _fetchDeviceInfo() async {
-    debugPrint('🚀 ========== TV DEVICE INFO START ==========');
+ Future<void> _fetchDeviceInfo() async {
+  print('🚀 ========== TV DEVICE INFO START ==========');
 
-    final info = await getDeviceInfo();
+  final info = await getDeviceInfo();
 
-    final computed = info['macLikeId'] ?? '';
+  final computed = info['macLikeId'] ?? '';
 
-    // 📱 Print device information
-    debugPrint('📱 Device Model: ${info['model']}');
-    debugPrint('🤖 Android Version: ${info['androidVersion']}');
-    debugPrint('💻 Platform: ${info['plateform']}');
-    debugPrint('🆔 Computed Device ID: $computed');
+  // 📱 Print device information
+  print('📱 Device Model: ${info['model']}');
+  print('🤖 Android Version: ${info['androidVersion']}');
+  print('💻 Platform: ${info['plateform']}');
+  print('🆔 Computed Device ID: $computed');
 
-    if (computed.isNotEmpty) {
-      macAddress = computed;
-      debugPrint('📡 Updated MAC Address: $macAddress');
-    }
-
-    // 📦 Fetch saved device information
-    final saved = await SharedPref.getUserDeviceInfo();
-
-    debugPrint('📦 Saved Device Info: $saved');
-    debugPrint('🆔 Saved Device ID: ${saved['deviceId']}');
-    debugPrint('📡 Saved MAC Address: ${saved['mac']}');
-    debugPrint('🔑 Saved Token: ${saved['token']}');
-    debugPrint('🔐 Saved Device Secret: ${saved['deviceSecret']}');
-
-    final storedMac = saved['mac'] as String? ?? '';
-
-    if (storedMac.isNotEmpty) {
-      macAddress = storedMac;
-      debugPrint('✅ Using Saved MAC Address: $macAddress');
-    }
-
-    // 🔐 Check whether device registration is required
-    if (saved['deviceSecret'] == null ||
-        (saved['deviceSecret'] as String).isEmpty) {
-      debugPrint('⚠️ Device Secret Missing. Starting Registration...');
-      debugPrint(
-        '📤 Registration Request: ${{"deviceId": computed, "deviceModel": info['model'] ?? "", "osVersion": info['androidVersion'] ?? "", "platform": info['plateform'] ?? ""}}',
-      );
-
-      final res = await _apiService.hitPostApi(
-        reqData: {
-          "deviceId": computed,
-          "deviceModel": info['model'] ?? "",
-          "osVersion": info['androidVersion'] ?? "",
-          "platform": info['plateform'] ?? "",
-        },
-        endpoint: Endpoints.deviceRegister,
-      );
-
-      // 📥 Print API response
-      if (kDebugMode) {
-        log('📥 TV Device Registration Response: ${res.data}');
-        debugPrint('📊 API Success: ${res.isSuccess}');
-        debugPrint('❌ API Error: ${res.error}');
-      }
-
-      if (res.isSuccess) {
-        debugPrint('🎉 TV Device Registered Successfully!');
-        debugPrint('🆔 Registered Device ID: ${res.data['deviceId']}');
-        debugPrint('🔑 Received Token: ${res.data['token']}');
-        debugPrint('🔐 Received Device Secret: ${res.data['deviceSecret']}');
-
-        await SharedPref.setUserDeviceInfo(
-          macAddress: computed,
-          deviceId: res.data['deviceId'] ?? "",
-          status: "",
-          token: res.data['token'] ?? "",
-          deviceSecret: res.data['deviceSecret'] ?? "",
-        );
-
-        debugPrint('💾 Device information saved successfully.');
-
-        // 🔍 Print updated saved information
-        final updated = await SharedPref.getUserDeviceInfo();
-        debugPrint('📦 Updated Saved Device Info: $updated');
-        debugPrint('🆔 Updated Device ID: ${updated['deviceId']}');
-        debugPrint('📡 Updated MAC Address: ${updated['mac']}');
-        debugPrint('🔑 Updated Token: ${updated['token']}');
-        debugPrint('🔐 Updated Device Secret: ${updated['deviceSecret']}');
-      } else {
-        debugPrint('🚫 TV Device Registration Failed!');
-        debugPrint('📛 Error: ${res.error}');
-        log('TV Login with MAC failed: ${res.error}');
-      }
-    } else {
-      debugPrint('✅ TV Device Already Registered.');
-      debugPrint('🔐 Existing Device Secret Found.');
-    }
-
-    debugPrint('🏁 ========== TV DEVICE INFO END ==========');
+  if (computed.isNotEmpty) {
+    macAddress = computed;
+    print('📡 Updated MAC Address: $macAddress');
   }
+
+  // 📦 Fetch saved device information
+  final saved = await SharedPref.getUserDeviceInfo();
+
+  print('📦 Saved Device Info: $saved');
+  print('🆔 Saved Device ID: ${saved['deviceId']}');
+  print('📡 Saved MAC Address: ${saved['mac']}');
+  print('🔑 Saved Token: ${saved['token']}');
+  print('🔐 Saved Device Secret: ${saved['deviceSecret']}');
+
+  final storedMac = saved['mac'] as String? ?? '';
+
+  if (storedMac.isNotEmpty) {
+    macAddress = storedMac;
+    print('✅ Using Saved MAC Address: $macAddress');
+  }
+
+  // 🔐 Check whether device registration is required
+  if (saved['deviceSecret'] == null ||
+      (saved['deviceSecret'] as String).isEmpty) {
+    print('⚠️ Device Secret Missing. Starting Registration...');
+    print(
+      '📤 Registration Request: ${{"deviceId": computed, "deviceModel": info['model'] ?? "", "osVersion": info['androidVersion'] ?? "", "platform": info['plateform'] ?? ""}}',
+    );
+
+    final res = await _apiService.hitPostApi(
+      reqData: {
+        "deviceId": computed,
+        "deviceModel": info['model'] ?? "",
+        "osVersion": info['androidVersion'] ?? "",
+        "platform": info['plateform'] ?? "",
+      },
+      endpoint: Endpoints.deviceRegister,
+    );
+
+    // 📥 Print API response
+    if (kDebugMode) {
+      print('📥 TV Device Registration Response: ${res.data}');
+      print('📊 API Success: ${res.isSuccess}');
+      print('❌ API Error: ${res.error}');
+    }
+
+    if (res.isSuccess) {
+      print('🎉 TV Device Registered Successfully!');
+      print('🆔 Registered Device ID: ${res.data['deviceId']}');
+      print('🔑 Received Token: ${res.data['token']}');
+      print('🔐 Received Device Secret: ${res.data['deviceSecret']}');
+
+      await SharedPref.setUserDeviceInfo(
+        macAddress: computed,
+        deviceId: res.data['deviceId'] ?? "",
+        status: "",
+        token: res.data['token'] ?? "",
+        deviceSecret: res.data['deviceSecret'] ?? "",
+      );
+
+      print('💾 Device information saved successfully.');
+
+      // 🔍 Print updated saved information
+      final updated = await SharedPref.getUserDeviceInfo();
+      print('📦 Updated Saved Device Info: $updated');
+      print('🆔 Updated Device ID: ${updated['deviceId']}');
+      print('📡 Updated MAC Address: ${updated['mac']}');
+      print('🔑 Updated Token: ${updated['token']}');
+      print('🔐 Updated Device Secret: ${updated['deviceSecret']}');
+    } else {
+      print('🚫 TV Device Registration Failed!');
+      print('📛 Error: ${res.error}');
+      print('TV Login with MAC failed: ${res.error}');
+    }
+  } else {
+    print('✅ TV Device Already Registered.');
+    print('🔐 Existing Device Secret Found.');
+  }
+
+  print('🏁 ========== TV DEVICE INFO END ==========');
+}
 
   Future<void> _checkUserStatus() async {
     try {

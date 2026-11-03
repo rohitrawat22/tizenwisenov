@@ -10,6 +10,8 @@ class FavModel {
   final bool isLive;
   final String? containerExtension;
   final String? type; // 'live', 'movie', 'series'
+  final String? playlistId;
+  final String? addedAt; // ISO timestamp from server
 
   FavModel({
     required this.id,
@@ -21,8 +23,58 @@ class FavModel {
     this.isLive = false,
     this.containerExtension,
     this.type,
+    this.playlistId,
+    this.addedAt,
   });
 
+  /// Returns the stream type enum string the API expects: "LIVE", "VOD", or "SERIES".
+  String get streamType {
+    if (type != null) {
+      switch (type!.toLowerCase()) {
+        case 'live':
+          return 'LIVE';
+        case 'series':
+          return 'SERIES';
+        default:
+          return 'VOD';
+      }
+    }
+    return isLive ? 'LIVE' : 'VOD';
+  }
+
+  /// Build from the server API response (`GET /api/favorites/{playlistId}`).
+  factory FavModel.fromApiJson(Map<String, dynamic> json) {
+    final String rawStreamType = (json['streamType'] ?? 'VOD')
+        .toString()
+        .toUpperCase();
+    final bool live = rawStreamType == 'LIVE';
+    final String typeValue;
+    switch (rawStreamType) {
+      case 'LIVE':
+        typeValue = 'live';
+        break;
+      case 'SERIES':
+        typeValue = 'series';
+        break;
+      default:
+        typeValue = 'movie';
+    }
+    return FavModel(
+      id: (json['streamId'] ?? json['id'] ?? '').toString(),
+      url: '',
+      photoImage: json['streamIcon'] ?? '',
+      title: json['name'] ?? '',
+      categoryId: json['categoryId']?.toString(),
+      urlTillChannel: json['urlTillChannel'],
+      isLive: live,
+      containerExtension: json['containerExtension'],
+      type: typeValue,
+      playlistId: json['playlistId']?.toString(),
+      addedAt: json['addedAt']?.toString(),
+    );
+  }
+
+  /// Build from legacy local Hive/JSON data.
   factory FavModel.fromJson(Map<String, dynamic> json) {
     return FavModel(
       id: json['id'] ?? "",
@@ -34,6 +86,8 @@ class FavModel {
       isLive: json['isLive'] ?? false,
       containerExtension: json['containerExtension'],
       type: json['type'],
+      playlistId: json['playlistId'],
+      addedAt: json['addedAt'],
     );
   }
 
@@ -48,6 +102,8 @@ class FavModel {
       'isLive': isLive,
       'containerExtension': containerExtension,
       'type': type ?? (isLive ? 'live' : 'movie'), // fallback for old data
+      'playlistId': playlistId,
+      'addedAt': addedAt,
     };
   }
 
@@ -63,6 +119,7 @@ class FavModel {
     String? urlTillChannel,
     bool? isLive,
     String? containerExtension,
+    String? playlistId,
   }) {
     return FavModel(
       id: id ?? this.id,
@@ -73,6 +130,7 @@ class FavModel {
       urlTillChannel: urlTillChannel ?? this.urlTillChannel,
       isLive: isLive ?? this.isLive,
       containerExtension: containerExtension ?? this.containerExtension,
+      playlistId: playlistId ?? this.playlistId,
     );
   }
 
@@ -86,5 +144,5 @@ class FavModel {
 
   @override
   String toString() =>
-      'FavModel(id: $id, title: $title, isLive: $isLive, categoryId: $categoryId)';
+      'FavModel(id: $id, title: $title, isLive: $isLive, categoryId: $categoryId, playlistId: $playlistId)';
 }

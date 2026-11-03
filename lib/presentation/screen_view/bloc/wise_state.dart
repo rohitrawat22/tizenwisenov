@@ -11,6 +11,8 @@ class WiseState extends Equatable {
   List<GetplayListModel> playLists;
   List<VideosOnPerticulerChannelModel> videoOnParticulerChannelList;
   List<VideosOnPerticulerChannelModel> filterVideoOnParticulerChannelList;
+  List<FavModel> favorites;
+  bool isFavoritesLoading;
 
   // int channelIndex;
   Status status;
@@ -41,6 +43,8 @@ class WiseState extends Equatable {
     this.playLists = const [],
     this.videoOnParticulerChannelList = const [],
     this.filterVideoOnParticulerChannelList = const [],
+    this.favorites = const [],
+    this.isFavoritesLoading = false,
     // this.channelIndex = 0,
     this.status = Status.initial,
     this.errorMessage = "",
@@ -63,6 +67,8 @@ class WiseState extends Equatable {
     List<VideosOnPerticulerChannelModel>? videoOnParticulerChannelList,
     List<VideosOnPerticulerChannelModel>? filterVideoOnParticulerChannelList,
     List<GetplayListModel>? playLists,
+    List<FavModel>? favorites,
+    bool? isFavoritesLoading,
     int? channelIndex,
     Status? status,
     String? resumeSeconds,
@@ -92,6 +98,8 @@ class WiseState extends Equatable {
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
       playLists: playLists ?? this.playLists,
+      favorites: favorites ?? this.favorites,
+      isFavoritesLoading: isFavoritesLoading ?? this.isFavoritesLoading,
       videoUrl: videoUrl ?? this.videoUrl,
       resumeSeconds: resumeSeconds ?? this.resumeSeconds,
       isMoreVideoOnParticulerChannelListLoading:
@@ -117,6 +125,8 @@ class WiseState extends Equatable {
     videoOnParticulerChannelList,
     filterVideoOnParticulerChannelList,
     playLists,
+    favorites,
+    isFavoritesLoading,
     status,
     errorMessage,
     videoUrl,

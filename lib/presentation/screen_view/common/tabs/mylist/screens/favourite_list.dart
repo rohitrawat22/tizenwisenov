@@ -1,28 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import 'dart:async';
+
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:wiseplayertizen/core/colors/colors.dart';
 import 'package:wiseplayertizen/core/utils/dpad_focus_graph.dart';
 import 'package:wiseplayertizen/core/widgets/cached_image.dart';
-
-import 'package:wiseplayertizen/data/local_storage/hive_service.dart';
 import 'package:wiseplayertizen/data/models/fav.mode.dart';
-import 'package:wiseplayertizen/presentation/screen_view/common/fav/fav.video.dart';
+import 'package:wiseplayertizen/presentation/screen_view/bloc/model/videos_on_particuler_channel_model.dart';
+import 'package:wiseplayertizen/presentation/screen_view/bloc/wise_bloc.dart';
+import 'package:wiseplayertizen/presentation/screen_view/web/screens/stream_player.dart';
+import 'package:wiseplayertizen/series/serie.details.dart'
+    show SeriesDetailScreen;
+
+import '../../../../../../core/utils/tv_detector.dart' show TvDetector;
 
 class FavouriteScreen extends StatefulWidget {
   static const String routeName = '/favourites';
-  const FavouriteScreen({super.key});
+  final String? playlistId;
+  const FavouriteScreen({super.key, this.playlistId});
 
   @override
   State<FavouriteScreen> createState() => _FavouriteScreenState();
 }
 
 class _FavouriteScreenState extends State<FavouriteScreen> {
-  List<FavModel> favList = [];
-  bool isLoading = true;
+  String _playlistId = "";
+  String _selectedCategory = 'ALL';
 
   // Focus nodes for the action buttons in the AppBar area
-  final FocusNode _backFocusNode = FocusNode(debugLabel: 'fav_back');
   final FocusNode _clearFocusNode = FocusNode(debugLabel: 'fav_clear_all');
+  final FocusNode _tabAllNode = FocusNode(debugLabel: 'fav_tab_all');
+  final FocusNode _tabLiveNode = FocusNode(debugLabel: 'fav_tab_live');
+  final FocusNode _tabVodNode = FocusNode(debugLabel: 'fav_tab_vod');
+  final FocusNode _tabSeriesNode = FocusNode(debugLabel: 'fav_tab_series');
 
   // Focus nodes pool for list items
   final Map<int, List<FocusNode>> _itemFocusNodes = {};
@@ -39,46 +51,94 @@ class _FavouriteScreenState extends State<FavouriteScreen> {
   @override
   void initState() {
     super.initState();
+    _playlistId =
+        widget.playlistId ??
+        context.read<WiseBloc>().state.playLists.firstOrNull?.id ??
+        "";
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.portraitUp,
+    ]);
+
     _loadFavourites();
 
     // Use shared wireDpadNode helper for static bar buttons.
     wireDpadNode(
       _clearFocusNode,
-      left: _backFocusNode,
       lockUp: true,
       lockRight: true,
       lockDown: true,
+      lockLeft: true,
+      onSelect: _clearAllFav,
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _clearFocusNode.requestFocus();
+    });
+  }
+
+  /// Re-wire the static app-bar buttons after state changes so
+  /// down-arrow → first item remain correct.
+  void _wireBarButtons(List<FavModel> favList) {
+    wireDpadNode(
+      _clearFocusNode,
+      down: _tabAllNode,
+      lockUp: true,
+      lockRight: true,
+      lockLeft: true,
       onSelect: _clearAllFav,
     );
 
     wireDpadNode(
-      _backFocusNode,
-      lockUp: true,
+      _tabAllNode,
+      up: _clearFocusNode,
+      down: favList.isNotEmpty ? _nodesForItem(0)[0] : null,
+      right: _tabLiveNode,
       lockLeft: true,
-      onSelect: () => Navigator.of(context).pop(),
+      onSelect: () => _onTabSelected('ALL'),
     );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _backFocusNode.requestFocus();
-    });
+    wireDpadNode(
+      _tabLiveNode,
+      up: _clearFocusNode,
+      down: favList.isNotEmpty ? _nodesForItem(0)[0] : null,
+      left: _tabAllNode,
+      right: _tabVodNode,
+      onSelect: () => _onTabSelected('LIVE'),
+    );
+    wireDpadNode(
+      _tabVodNode,
+      up: _clearFocusNode,
+      down: favList.isNotEmpty ? _nodesForItem(0)[0] : null,
+      left: _tabLiveNode,
+      right: _tabSeriesNode,
+      onSelect: () => _onTabSelected('VOD'),
+    );
+    wireDpadNode(
+      _tabSeriesNode,
+      up: _clearFocusNode,
+      down: favList.isNotEmpty ? _nodesForItem(0)[0] : null,
+      left: _tabVodNode,
+      lockRight: true,
+      onSelect: () => _onTabSelected('SERIES'),
+    );
   }
 
-  /// Re-wire the static app-bar buttons after favList changes so
-  /// right-arrow from back → clear and down-arrow → first item remain correct.
-  void _wireBarButtons() {
-    wireDpadNode(
-      _backFocusNode,
-      right: favList.isNotEmpty ? _clearFocusNode : null,
-      down: favList.isNotEmpty ? _nodesForItem(0)[0] : null,
-      lockUp: true,
-      lockLeft: true,
-      onSelect: () => Navigator.of(context).pop(),
-    );
+  FocusNode _getCurrentTabNode() {
+    switch (_selectedCategory) {
+      case 'LIVE':
+        return _tabLiveNode;
+      case 'VOD':
+        return _tabVodNode;
+      case 'SERIES':
+        return _tabSeriesNode;
+      default:
+        return _tabAllNode;
+    }
   }
 
   /// Wire the entire D-pad focus graph for all current list items.
-  /// Called only when [favList] changes — never inside itemBuilder.
-  void _wireFocusGraph() {
+  /// Called only when favorites change.
+  void _wireFocusGraph(List<FavModel> favList) {
     for (int index = 0; index < favList.length; index++) {
       final nodes = _nodesForItem(index);
       final playNode = nodes[0];
@@ -88,26 +148,17 @@ class _FavouriteScreenState extends State<FavouriteScreen> {
       wireDpadNode(
         playNode,
         right: removeNode,
-        up: index == 0 ? _backFocusNode : _nodesForItem(index - 1)[0],
+        up: index == 0 ? _getCurrentTabNode() : _nodesForItem(index - 1)[0],
         down: index < favList.length - 1 ? _nodesForItem(index + 1)[0] : null,
         lockDown: index == favList.length - 1,
         lockLeft: true,
-        onSelect: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => FavVideoPlayerScreen(favItem: fav),
-            ),
-          ).then((_) {
-            if (mounted) _loadFavourites();
-          });
-        },
+        onSelect: () => _playFavorite(fav),
       );
 
       wireDpadNode(
         removeNode,
         left: playNode,
-        up: index == 0 ? _clearFocusNode : _nodesForItem(index - 1)[1],
+        up: index == 0 ? _getCurrentTabNode() : _nodesForItem(index - 1)[1],
         down: index < favList.length - 1 ? _nodesForItem(index + 1)[1] : null,
         lockDown: index == favList.length - 1,
         lockRight: true,
@@ -118,8 +169,11 @@ class _FavouriteScreenState extends State<FavouriteScreen> {
 
   @override
   void dispose() {
-    _backFocusNode.dispose();
     _clearFocusNode.dispose();
+    _tabAllNode.dispose();
+    _tabLiveNode.dispose();
+    _tabVodNode.dispose();
+    _tabSeriesNode.dispose();
     for (final nodes in _itemFocusNodes.values) {
       for (final n in nodes) {
         n.dispose();
@@ -127,6 +181,87 @@ class _FavouriteScreenState extends State<FavouriteScreen> {
     }
     _itemFocusNodes.clear();
     super.dispose();
+  }
+
+  void _playFavorite(FavModel fav) {
+    final isSeries = fav.streamType == 'SERIES';
+
+    if (isSeries) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SeriesDetailScreen(
+            playlistId: _playlistId,
+            seriesId: fav.id,
+            baseUrl: "https://api.wise-player.com/",
+          ),
+        ),
+      ).then((_) {
+        if (mounted) _loadFavourites();
+      });
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppColor.accentRed),
+      ),
+    );
+
+    final bloc = context.read<WiseBloc>();
+    late StreamSubscription sub;
+    sub = bloc.stream.listen((state) {
+      if (state.status == Status.success && state.videoUrl.isNotEmpty) {
+        sub.cancel();
+        if (mounted) Navigator.pop(context);
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => VideoPlayerScreen(
+              videoUrl: state.videoUrl,
+              streaID: fav.id,
+              playlistId: _playlistId,
+              videoInfo: VideosOnPerticulerChannelModel(
+                streamId: fav.id.toString(),
+                name: fav.title,
+                streamIcon: fav.photoImage,
+                streamType: fav.streamType,
+                categoryId: fav.playlistId,
+                containerExtension: fav.containerExtension,
+              ),
+              isLiveTv: fav.streamType == 'LIVE',
+              resumeSecond: 0,
+              streamType: fav.streamType,
+            ),
+          ),
+        ).then((_) {
+          bloc.add(ResetVideoUrlEvent());
+          if (mounted) _loadFavourites();
+        });
+      } else if (state.status == Status.error ||
+          state.status == Status.littleError) {
+        sub.cancel();
+        if (mounted) Navigator.pop(context);
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(state.errorMessage)));
+        }
+      }
+    });
+
+    bloc.add(ResetVideoUrlEvent());
+    bloc.add(
+      PlayFavoriteEvent(
+        playlistId: _playlistId,
+        streamId: fav.id,
+        streamType: fav.streamType,
+        extension: fav.containerExtension,
+      ),
+    );
   }
 
   // ── Focus-node cache invalidation ────────────────────────────────────────
@@ -138,53 +273,75 @@ class _FavouriteScreenState extends State<FavouriteScreen> {
     final bool hadFocusInside = _itemFocusNodes.values.any(
       (nodes) => nodes.any((n) => n.hasFocus),
     );
+    final oldNodes = <FocusNode>[];
     for (final nodes in _itemFocusNodes.values) {
-      for (final n in nodes) {
-        n.dispose();
-      }
+      oldNodes.addAll(nodes);
     }
     _itemFocusNodes.clear();
     if (hadFocusInside) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _backFocusNode.requestFocus();
+        if (mounted) _clearFocusNode.requestFocus();
       });
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final n in oldNodes) {
+        n.dispose();
+      }
+    });
+  }
+
+  void _onTabSelected(String category) {
+    if (_selectedCategory == category) return;
+    setState(() {
+      _selectedCategory = category;
+    });
+    _loadFavourites();
   }
 
   Future<void> _loadFavourites() async {
-    if (!mounted) return;
-    _invalidateItemFocusNodes(); // dispose stale nodes before list changes
-    setState(() => isLoading = true);
-    final data = HiveService.getFavList();
-    if (mounted) {
-      setState(() {
-        favList = data;
-        isLoading = false;
-      });
-      _wireBarButtons();
-      _wireFocusGraph(); // wire all item nodes after list is set
-    }
+    if (!mounted || _playlistId.isEmpty) return;
+    _invalidateItemFocusNodes();
+    context.read<WiseBloc>().add(
+      LoadFavoritesEvent(
+        playlistId: _playlistId,
+        streamType: _selectedCategory == 'ALL' ? null : _selectedCategory,
+      ),
+    );
   }
 
   Future<void> _removeFav(FavModel fav) async {
-    await HiveService.deleteFav(fav.id);
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => _PremiumConfirmDialog(
+        title: 'Remove Favourite',
+        message: 'Remove "${fav.title}" from your favourites?',
+        confirmLabel: 'Remove',
+        cancelLabel: 'Keep',
+        isDangerous: true,
+      ),
+    );
+    if (confirm != true) return;
     if (!mounted) return;
-    _invalidateItemFocusNodes(); // dispose before list shrinks
-    setState(() => favList.removeWhere((item) => item.id == fav.id));
-    _wireBarButtons();
-    _wireFocusGraph(); // re-wire after list shrinks
+    _invalidateItemFocusNodes();
+    print('dsadasdddddddd');
+    context.read<WiseBloc>().add(
+      RemoveFavoriteEvent(
+        playlistId: _playlistId,
+        streamId: fav.id,
+        streamType: fav.streamType,
+      ),
+    );
     _showToast('${fav.title} removed from favourites', isError: true);
   }
 
   Future<void> _clearAllFav() async {
     final confirm = await _showClearAllDialog();
     if (confirm == true) {
-      await HiveService.clearAll();
-      if (!mounted) return;
-      _invalidateItemFocusNodes(); // dispose before list empties
-      setState(() => favList.clear());
-      _wireBarButtons();
-      // No need to call _wireFocusGraph() — list is empty
+      _invalidateItemFocusNodes();
+      context.read<WiseBloc>().add(
+        ClearAllFavoritesEvent(playlistId: _playlistId),
+      );
     }
   }
 
@@ -256,17 +413,34 @@ class _FavouriteScreenState extends State<FavouriteScreen> {
               // ── Custom AppBar ──────────────────────────────────────────
               _buildAppBar(isTV),
 
+              // ── Categories ──────────────────────────────────────────────
+              _buildCategories(),
+
               // ── Body ──────────────────────────────────────────────────
               Expanded(
-                child: isLoading
-                    ? const Center(
+                child: BlocConsumer<WiseBloc, WiseState>(
+                  listenWhen: (previous, current) =>
+                      previous.favorites != current.favorites,
+                  listener: (context, state) {
+                    if (mounted) {
+                      _wireBarButtons(state.favorites);
+                      _wireFocusGraph(state.favorites);
+                    }
+                  },
+                  builder: (context, state) {
+                    if (state.isFavoritesLoading) {
+                      return const Center(
                         child: CircularProgressIndicator(
                           color: AppColor.accentRed,
                         ),
-                      )
-                    : favList.isEmpty
-                    ? _buildEmptyState()
-                    : _buildFavList(isTV),
+                      );
+                    }
+                    if (state.favorites.isEmpty) {
+                      return _buildEmptyState();
+                    }
+                    return _buildFavList(isTV, state.favorites);
+                  },
+                ),
               ),
             ],
           ),
@@ -276,82 +450,76 @@ class _FavouriteScreenState extends State<FavouriteScreen> {
   }
 
   Widget _buildAppBar(bool isTV) {
-    return Container(
-      height: isTV ? 64 : 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Back button
-          _AppBarButton(
-            focusNode: _backFocusNode,
-            icon: Icons.arrow_back_rounded,
-            onTap: () => Navigator.of(context).pop(),
-            tooltip: 'Back',
+    return BlocBuilder<WiseBloc, WiseState>(
+      builder: (context, state) {
+        return Container(
+          height: isTV ? 64 : 56,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+            ),
           ),
-
-          const SizedBox(width: 14),
-
-          // Title
-          Row(
+          child: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColor.accentRed.withValues(alpha: 0.15),
-                ),
-                child: const Icon(
-                  Icons.favorite_rounded,
-                  color: AppColor.accentRed,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
+              // Title
+              Row(
                 children: [
-                  const Text(
-                    'Favourites',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.3,
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColor.accentRed.withValues(alpha: 0.15),
+                    ),
+                    child: const Icon(
+                      Icons.favorite_rounded,
+                      color: AppColor.accentRed,
+                      size: 20,
                     ),
                   ),
-                  if (favList.isNotEmpty)
-                    Text(
-                      '${favList.length} saved',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.45),
-                        fontSize: 12,
+                  const SizedBox(width: 10),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Favourites',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.3,
+                        ),
                       ),
-                    ),
+                      if (state.favorites.isNotEmpty)
+                        Text(
+                          '${state.favorites.length} saved',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.45),
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
+
+              const Spacer(),
+
+              // Clear all button
+              if (state.favorites.isNotEmpty)
+                _AppBarButton(
+                  focusNode: _clearFocusNode,
+                  icon: Icons.delete_sweep_rounded,
+                  label: 'Clear All',
+                  onTap: _clearAllFav,
+                  isDestructive: true,
+                  tooltip: 'Remove all favourites',
+                ),
             ],
           ),
-
-          const Spacer(),
-
-          // Clear all button
-          if (favList.isNotEmpty)
-            _AppBarButton(
-              focusNode: _clearFocusNode,
-              icon: Icons.delete_sweep_rounded,
-              label: 'Clear All',
-              onTap: _clearAllFav,
-              isDestructive: true,
-              tooltip: 'Remove all favourites',
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -359,37 +527,63 @@ class _FavouriteScreenState extends State<FavouriteScreen> {
     return const _FavEmptyState();
   }
 
-  Widget _buildFavList(bool isTV) {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      itemCount: favList.length,
-      itemBuilder: (context, index) {
-        final fav = favList[index];
-        final nodes = _nodesForItem(index);
-        final playNode = nodes[0];
-        final removeNode = nodes[1];
+  Widget _buildCategories() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Row(
+        children: [
+          _buildCategoryChip('ALL', 'All Types', _tabAllNode),
+          const SizedBox(width: 8),
+          _buildCategoryChip('LIVE', 'Live', _tabLiveNode),
+          const SizedBox(width: 8),
+          _buildCategoryChip('VOD', 'Movies', _tabVodNode),
+          const SizedBox(width: 8),
+          _buildCategoryChip('SERIES', 'Series', _tabSeriesNode),
+        ],
+      ),
+    );
+  }
 
-        // Focus graph is wired in _wireFocusGraph() which runs only when
-        // favList changes — NOT on every scroll/build frame.
-        return _FavItemCard(
-          fav: fav,
-          index: index,
-          total: favList.length,
-          playNode: playNode,
-          removeNode: removeNode,
-          onPlay: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => FavVideoPlayerScreen(favItem: fav),
-              ),
-            ).then((_) {
-              if (mounted) _loadFavourites();
-            });
-          },
-          onRemove: () => _removeFav(fav),
-        );
-      },
+  Widget _buildCategoryChip(String type, String label, FocusNode focusNode) {
+    final isSelected = _selectedCategory == type;
+    return ActionChip(
+      focusNode: focusNode,
+      backgroundColor: isSelected ? AppColor.accentRed : Colors.white12,
+      side: BorderSide(
+        color: isSelected ? AppColor.accentRed : Colors.transparent,
+      ),
+      label: Text(
+        label,
+        style: TextStyle(color: isSelected ? Colors.white : Colors.white70),
+      ),
+      onPressed: () => _onTabSelected(type),
+    );
+  }
+
+  Widget _buildFavList(bool isTV, List<FavModel> favList) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      child: Column(
+        children: List.generate(favList.length, (index) {
+          final fav = favList[index];
+          final nodes = _nodesForItem(index);
+
+          final playNode = nodes[0];
+          final removeNode = nodes[1];
+
+          // Focus graph is wired in _wireFocusGraph() which runs only when
+          // favList changes — NOT on every scroll/build frame.
+          return _FavItemCard(
+            fav: fav,
+            index: index,
+            total: favList.length,
+            playNode: playNode,
+            removeNode: removeNode,
+            onPlay: () => _playFavorite(fav),
+            onRemove: () => _removeFav(fav),
+          );
+        }),
+      ),
     );
   }
 }
@@ -495,14 +689,17 @@ class _AppBarButtonState extends State<_AppBarButton> {
 
   @override
   Widget build(BuildContext context) {
+    final isTV = TvDetector.isTVDevice;
+    final isFocused = isTV && _isFocused;
     final accent = widget.isDestructive ? AppColor.accentRed : Colors.white;
     return Tooltip(
       message: widget.tooltip ?? '',
       child: AnimatedScale(
-        scale: _isFocused ? 1.08 : 1.0,
+        scale: isFocused ? 1.08 : 1.0,
         duration: const Duration(milliseconds: 150),
         child: InkWell(
-          focusNode: widget.focusNode,
+          focusNode: isTV ? widget.focusNode : null,
+          canRequestFocus: isTV,
           onTap: widget.onTap,
           borderRadius: BorderRadius.circular(12),
           child: AnimatedContainer(
@@ -512,17 +709,17 @@ class _AppBarButtonState extends State<_AppBarButton> {
               vertical: 8,
             ),
             decoration: BoxDecoration(
-              color: _isFocused
+              color: isFocused
                   ? accent.withValues(alpha: 0.18)
                   : Colors.white.withValues(alpha: 0.04),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: _isFocused
-                    ? accent.withValues(alpha: 0.7)
+                color: isFocused
+                    ? Colors.white
                     : Colors.white.withValues(alpha: 0.08),
-                width: _isFocused ? 1.8 : 1.0,
+                width: isFocused ? 2.0 : 1.0,
               ),
-              boxShadow: _isFocused
+              boxShadow: isFocused
                   ? [
                       BoxShadow(
                         color: accent.withValues(alpha: 0.25),
@@ -603,10 +800,39 @@ class _FavItemCardState extends State<_FavItemCard> {
 
   void _rebuild() {
     if (mounted) {
+      final wasFocused = _playFocused || _removeFocused;
+      final isNowFocused =
+          widget.playNode.hasFocus || widget.removeNode.hasFocus;
+
       setState(() {
         _playFocused = widget.playNode.hasFocus;
         _removeFocused = widget.removeNode.hasFocus;
       });
+
+      if (isNowFocused && !wasFocused) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (Scrollable.maybeOf(context) == null) return;
+          Scrollable.ensureVisible(
+            context,
+            alignment: 0.5,
+            duration: const Duration(milliseconds: 150),
+          );
+        });
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(_FavItemCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.playNode != widget.playNode) {
+      oldWidget.playNode.removeListener(_rebuild);
+      widget.playNode.addListener(_rebuild);
+    }
+    if (oldWidget.removeNode != widget.removeNode) {
+      oldWidget.removeNode.removeListener(_rebuild);
+      widget.removeNode.addListener(_rebuild);
     }
   }
 
@@ -627,18 +853,15 @@ class _FavItemCardState extends State<_FavItemCard> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: _playFocused
-              ? Colors.white.withValues(alpha: 0.7)
-              : (_removeFocused
-                    ? AppColor.accentRed.withValues(alpha: 0.7)
-                    : Colors.white.withValues(alpha: 0.06)),
+          color: isAnyFocused
+              ? Colors.white
+              : Colors.white.withValues(alpha: 0.06),
           width: isAnyFocused ? 2.0 : 1.0,
         ),
         boxShadow: isAnyFocused
             ? [
                 BoxShadow(
-                  color: (_playFocused ? Colors.white : AppColor.accentRed)
-                      .withValues(alpha: 0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                   blurRadius: 16,
                   spreadRadius: 1,
                 ),
@@ -820,7 +1043,7 @@ class _FavItemCardState extends State<_FavItemCard> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        Icons.favorite_rounded,
+                        Icons.delete_outline_rounded,
                         color: _removeFocused
                             ? AppColor.accentRed
                             : AppColor.accentRed.withValues(alpha: 0.5),

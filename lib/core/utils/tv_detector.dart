@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -10,8 +11,9 @@ import 'package:flutter/services.dart';
 class TvDetector {
   TvDetector._();
 
-  static const MethodChannel _channel =
-      MethodChannel('wise_players/tv_detector');
+  static const MethodChannel _channel = MethodChannel(
+    'wise_players/tv_detector',
+  );
 
   /// Cached result — detection only needs to run once per app session.
   static bool? _cachedIsTV;
@@ -47,4 +49,5 @@ class TvDetector {
   /// Reset the cache (useful for testing).
   @visibleForTesting
   static void resetCache() => _cachedIsTV = null;
+  static bool get isTVDevice => _cachedIsTV == true;
 }

@@ -199,7 +199,7 @@ class _LoginWithMacState extends State<LoginWithMac> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            appLogo(),
+            appLogo(), 
             const SizedBox(height: 25),
             const CText(
               "Activate Device",
@@ -217,7 +217,7 @@ class _LoginWithMacState extends State<LoginWithMac> {
             ),
             const SizedBox(height: 30),
             CustomTextFormFiled(
-              controller: macCtrl,
+              controller: macCtrl,   
               hintText: "Device Mac",
               isEnabled: false,
               isPreFixIcon: true,
@@ -253,7 +253,7 @@ class _LoginWithMacState extends State<LoginWithMac> {
     );
   }
 
-  // ── TV / Landscape Layout ──────────────────────────────────────────────────
+  // ── TV / Landscape Layout 
   Widget _buildTVLayout() {
     // Compute live width — never stale after rotation.
     final double tvCardWidth = (MediaQuery.sizeOf(context).width * 0.55).clamp(

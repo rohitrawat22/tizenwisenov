@@ -8,17 +8,18 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:wiseplayertizen/core/const/global_data/global_data.dart';
-import 'package:wiseplayertizen/core/shared_pref/shared_pref.dart';
-import 'package:wiseplayertizen/data/models/fav.mode.dart';
-import 'package:wiseplayertizen/presentation/screen_view/bloc/model/payment%20_invoice_model.dart';
 
-import 'package:wiseplayertizen/presentation/screen_view/bloc/repo/api_repo.dart';
+import 'package:wiseplayertizen/core/const/global_data/global_data.dart';
+import 'package:wiseplayertizen/core/error/exception.dart';
+import 'package:wiseplayertizen/core/shared_pref/shared_pref.dart';
 import 'package:wiseplayertizen/data/local_storage/pin_security_service.dart';
+import 'package:wiseplayertizen/presentation/screen_view/bloc/model/payment%20_invoice_model.dart';
+import 'package:wiseplayertizen/presentation/screen_view/bloc/repo/api_repo.dart';
 
 import 'model/channel_model.dart';
 import 'model/get_playList_model.dart';
 import 'model/videos_on_particuler_channel_model.dart';
+import '../../../../data/models/fav.mode.dart';
 
 part 'wise_event.dart';
 part 'wise_state.dart';
@@ -51,9 +52,16 @@ class WiseBloc extends Bloc<WiseEvent, WiseState> {
     on<PinPlaylistEvent>(_pinPlaylistEvent);
     on<UnpinPlaylistEvent>(_unpinPlaylistEvent);
     on<TogglePlaylistLockEvent>(_togglePlaylistLockEvent);
+    on<VerifyPlaylistPinEvent>(_verifyPlaylistPinEvent);
     on<SetDevicePinEvent>(_setDevicePinEvent);
     on<RemoveDevicePinEvent>(_removeDevicePinEvent);
     on<ChangePinEvent>(_changePinEvent);
+    on<VerifyDevicePinEvent>(_verifyDevicePinEvent);
+    on<LoadFavoritesEvent>(_loadFavoritesEvent);
+    on<AddFavoriteEvent>(_addFavoriteEvent);
+    on<RemoveFavoriteEvent>(_removeFavoriteEvent);
+    on<ClearAllFavoritesEvent>(_clearAllFavoritesEvent);
+    on<PlayFavoriteEvent>(_playFavoriteEvent);
   }
 
   _channelEvent(ChannelEvent event, Emitter<WiseState> emit) async {
@@ -61,24 +69,22 @@ class WiseBloc extends Bloc<WiseEvent, WiseState> {
       state.copyWith(
         status: Status.loading,
         filterVideoOnParticulerChannelList: [],
+        videoOnParticulerChannelList: [],
       ),
     );
     try {
       List<ChannelModel> data = await apiRepo.getChannels(event.url);
-      String channelId = '';
-      ChannelModel selectedChannel;
 
       if (data.isNotEmpty) {
-        final currentCategoryId = state.selectedChannel?.categoryId;
-        if (state.selectedChannel != null &&
-            currentCategoryId != null &&
-            currentCategoryId.isNotEmpty) {
-          selectedChannel = state.selectedChannel!;
-          channelId = currentCategoryId;
-        } else {
-          channelId = data.first.categoryId ?? '';
-          selectedChannel = data.first;
-        }
+        // Bug Fix 1 & 2: Always reset to the FIRST channel of the newly loaded
+        // list. Carrying over the old selectedChannel from a different content
+        // type (e.g. Series → Movies) caused:
+        //  • The old category to stay visually red (selected) on the new screen.
+        //  • Videos to be fetched using the stale categoryId, so the grid stayed
+        //    empty on the second visit.
+        final ChannelModel selectedChannel = data.first;
+        final String channelId = data.first.categoryId ?? '';
+
         emit(
           state.copyWith(
             channelsList: data,
@@ -87,7 +93,7 @@ class WiseBloc extends Bloc<WiseEvent, WiseState> {
             filterChannelsList: data,
           ),
         );
-        if (state.status == Status.success && channelId.isNotEmpty) {
+        if (channelId.isNotEmpty) {
           add(
             VideosOnPerticulerChannelEvent(
               channelId: channelId,
@@ -238,12 +244,46 @@ class WiseBloc extends Bloc<WiseEvent, WiseState> {
     emit(state.copyWith(playLists: updated));
 
     try {
-      await apiRepo.togglePlaylistLock(event.playlistId, event.isLocked);
+      if (event.isLocked && event.pin != null) {
+        // Step 1: set the PIN hash on the server
+        await apiRepo.setPlaylistPinOnServer(
+          playlistId: event.playlistId,
+          pin: event.pin!,
+        );
+      }
+      // Step 2 (locking) or sole call (unlocking)
+      await apiRepo.lockPlaylist(
+        playlistId: event.playlistId,
+        locked: event.isLocked,
+      );
     } catch (e) {
       emit(
         state.copyWith(status: Status.littleError, errorMessage: e.toString()),
       );
       add(GetPlayListEvent());
+    }
+  }
+
+  _verifyPlaylistPinEvent(
+    VerifyPlaylistPinEvent event,
+    Emitter<WiseState> emit,
+  ) async {
+    try {
+      final unlockedPlaylist = await apiRepo.verifyPlaylistPin(
+        playlistId: event.playlistId,
+        pin: event.pin,
+      );
+      final updated = state.playLists.map((p) {
+        if (p.id == unlockedPlaylist.id) {
+          return unlockedPlaylist;
+        }
+        return p;
+      }).toList();
+      emit(state.copyWith(playLists: updated));
+      event.onSuccess?.call(unlockedPlaylist);
+    } catch (e) {
+      final message = e is ServerException ? e.message : e.toString();
+      event.onError?.call(message);
     }
   }
 
@@ -305,8 +345,28 @@ class WiseBloc extends Bloc<WiseEvent, WiseState> {
     }
   }
 
+  /// Verifies the device PIN against the server (POST /api/playlist/pin/verify).
+  _verifyDevicePinEvent(
+    VerifyDevicePinEvent event,
+    Emitter<WiseState> emit,
+  ) async {
+    try {
+      await apiRepo.verifyDevicePin(event.pin);
+      event.onSuccess?.call();
+    } catch (e) {
+      final msg = e.toString().replaceFirst('ServerException: ', '');
+      event.onError?.call(msg);
+    }
+  }
+
   _getVideoUrlEvent(GetVideoUrlEvent event, Emitter<WiseState> emit) async {
-    emit(state.copyWith(status: Status.loading));
+    emit(state.copyWith(status: Status.loading, resumeSeconds: "0"));
+    state.resumeSeconds = "0";
+    print("event.urlTillChannel ${event.urlTillChannel}");
+    print("event.channelId ${event.channelId}");
+
+    print("event.extension ${event.extension}");
+
     try {
       final (url, resumeSeconds) = await apiRepo.getVideoUrl(
         urlTillPlayList: event.urlTillChannel,
@@ -428,17 +488,15 @@ class WiseBloc extends Bloc<WiseEvent, WiseState> {
   }
 
   _resetVideoUrlEvent(ResetVideoUrlEvent event, Emitter<WiseState> emit) async {
-    await Future.delayed(const Duration(seconds: 2), () async {
-      emit(
-        state.copyWith(
-          videoUrl: '',
-          isVideoLoaded: false,
-          isCatchUpPlayback: false,
-          selectedVideo: VideosOnPerticulerChannelModel.empty(),
-          status: Status.success,
-        ),
-      );
-    });
+    emit(
+      state.copyWith(
+        videoUrl: '',
+        isVideoLoaded: false,
+        isCatchUpPlayback: false,
+        selectedVideo: VideosOnPerticulerChannelModel.empty(),
+        status: Status.success,
+      ),
+    );
   }
 
   _paymentEvent(PaymentEvent event, Emitter<WiseState> emit) async {
@@ -594,6 +652,141 @@ class WiseBloc extends Bloc<WiseEvent, WiseState> {
       emit(state.copyWith(localeWord: event.localWord, status: Status.success));
     } else {
       emit(state.copyWith(localeWord: localeWord, status: Status.success));
+    }
+  }
+
+  // ── Favorites Handlers ────────────────────────────────────────────────────
+
+  _loadFavoritesEvent(LoadFavoritesEvent event, Emitter<WiseState> emit) async {
+    emit(state.copyWith(isFavoritesLoading: true, status: Status.loading));
+    try {
+      final favs = await apiRepo.getFavorites(
+        event.playlistId,
+        streamType: event.streamType,
+      );
+      emit(
+        state.copyWith(
+          favorites: favs,
+          isFavoritesLoading: false,
+          status: Status.success,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(
+          isFavoritesLoading: false,
+          status: Status.error,
+          errorMessage: e.toString(),
+        ),
+      );
+    }
+  }
+
+  _addFavoriteEvent(AddFavoriteEvent event, Emitter<WiseState> emit) async {
+    try {
+      await apiRepo.addFavorite(
+        playlistId: event.playlistId,
+        streamId: event.streamId,
+        streamType: event.streamType,
+        name: event.name,
+        streamIcon: event.streamIcon,
+      );
+      // Reload favorites to get the updated list
+      add(LoadFavoritesEvent(playlistId: event.playlistId));
+    } catch (e) {
+      emit(
+        state.copyWith(status: Status.littleError, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  _removeFavoriteEvent(
+    RemoveFavoriteEvent event,
+    Emitter<WiseState> emit,
+  ) async {
+    try {
+      await apiRepo.removeFavorite(
+        playlistId: event.playlistId,
+        streamId: event.streamId,
+        streamType: event.streamType,
+      );
+      // Update local state without waiting for full reload if possible,
+      // but reloading is safer to guarantee sync.
+      add(LoadFavoritesEvent(playlistId: event.playlistId));
+    } catch (e) {
+      emit(
+        state.copyWith(status: Status.littleError, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  _clearAllFavoritesEvent(
+    ClearAllFavoritesEvent event,
+    Emitter<WiseState> emit,
+  ) async {
+    try {
+      // API doesn't have a bulk delete, so we loop over existing state favorites
+      final List<FavModel> currentFavs = List.from(state.favorites);
+      if (currentFavs.isEmpty) return;
+
+      emit(state.copyWith(isFavoritesLoading: true));
+
+      for (var fav in currentFavs) {
+        if (fav.playlistId == null)
+          continue; // Can only remove if playlistId is known
+        try {
+          await apiRepo.removeFavorite(
+            playlistId: fav.playlistId!,
+            streamId: fav.id,
+            streamType: fav.streamType,
+          );
+        } catch (e) {
+          log("Failed to remove favorite ${fav.id}: $e");
+        }
+      }
+
+      add(LoadFavoritesEvent(playlistId: event.playlistId));
+    } catch (e) {
+      emit(
+        state.copyWith(
+          isFavoritesLoading: false,
+          status: Status.littleError,
+          errorMessage: e.toString(),
+        ),
+      );
+    }
+  }
+
+  _playFavoriteEvent(PlayFavoriteEvent event, Emitter<WiseState> emit) async {
+    try {
+      emit(
+        state.copyWith(
+          status: Status.loading,
+          isVideoLoaded: false,
+          videoUrl: '',
+        ),
+      );
+      final url = await apiRepo.getFavoritePlayUrl(
+        playlistId: event.playlistId,
+        streamId: event.streamId,
+        streamType: event.streamType,
+        extension: event.extension,
+      );
+      emit(
+        state.copyWith(
+          status: Status.success,
+          videoUrl: url,
+          isVideoLoaded: true,
+          isStopLoader: false,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(
+          status: Status.error,
+          errorMessage: e.toString().replaceFirst('Exception: ', ''),
+        ),
+      );
     }
   }
 }

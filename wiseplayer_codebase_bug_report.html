@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Wise Player Tizen - Codebase Audit & Bug Analysis Report</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm 18mm 16mm;
+
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-size: 9pt;
+        color: #718096;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #1a202c;
+      background: #ffffff;
+      line-height: 1.55;
+      font-size: 10pt;
+      margin: 0;
+      padding: 0;
+    }
+
+    .cover {
+      page-break-after: always;
+      padding-top: 60px;
+      text-align: center;
+    }
+
+    .cover-logo {
+      font-size: 32pt;
+      font-weight: 900;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .cover-logo span.red {
+      color: #800000;
+    }
+
+    .cover-title {
+      font-size: 22pt;
+      font-weight: 800;
+      color: #2d3748;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    .cover-subtitle {
+      font-size: 13pt;
+      color: #4a5568;
+      margin-bottom: 40px;
+    }
+
+    .meta-box {
+      display: inline-block;
+      text-align: left;
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px 30px;
+      margin: 30px auto;
+      font-size: 10pt;
+      color: #4a5568;
+    }
+
+    .meta-box table {
+      border: none;
+    }
+
+    .meta-box td {
+      padding: 4px 12px;
+    }
+
+    .meta-box td.label {
+      font-weight: bold;
+      color: #2d3748;
+    }
+
+    h1 {
+      font-size: 18pt;
+      font-weight: 800;
+      color: #1a202c;
+      border-bottom: 2px solid #800000;
+      padding-bottom: 6px;
+      margin-top: 30px;
+      page-break-after: avoid;
+    }
+
+    h2 {
+      font-size: 13pt;
+      font-weight: 700;
+      color: #2d3748;
+      margin-top: 24px;
+      margin-bottom: 8px;
+      page-break-after: avoid;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 8.5pt;
+      font-weight: 700;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-critical {
+      background: #fed7d7;
+      color: #9b2c2c;
+      border: 1px solid #feb2b2;
+    }
+
+    .badge-high {
+      background: #feebc8;
+      color: #9c4221;
+      border: 1px solid #fbd38d;
+    }
+
+    .badge-medium {
+      background: #fefcbf;
+      color: #744210;
+      border: 1px solid #faf089;
+    }
+
+    .badge-low {
+      background: #e2e8f0;
+      color: #4a5568;
+      border: 1px solid #cbd5e0;
+    }
+
+    .summary-grid {
+      display: table;
+      width: 100%;
+      margin: 20px 0;
+    }
+
+    .summary-col {
+      display: table-cell;
+      width: 25%;
+      text-align: center;
+      padding: 14px 10px;
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-right: none;
+    }
+
+    .summary-col:last-child {
+      border-right: 1px solid #e2e8f0;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .summary-col:first-child {
+      border-radius: 8px 0 0 8px;
+    }
+
+    .summary-col .count {
+      font-size: 22pt;
+      font-weight: 800;
+    }
+
+    .summary-col .lbl {
+      font-size: 8.5pt;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    .count-critical {
+      color: #e53e3e;
+    }
+
+    .count-high {
+      color: #dd6b20;
+    }
+
+    .count-medium {
+      color: #d69e2e;
+    }
+
+    .count-low {
+      color: #4a5568;
+    }
+
+    table.styled-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 9pt;
+    }
+
+    table.styled-table th {
+      background: #edf2f7;
+      color: #2d3748;
+      text-align: left;
+      padding: 8px 10px;
+      border: 1px solid #cbd5e0;
+      font-weight: 700;
+    }
+
+    table.styled-table td {
+      padding: 8px 10px;
+      border: 1px solid #e2e8f0;
+      vertical-align: top;
+    }
+
+    table.styled-table tr:nth-child(even) {
+      background: #f7fafc;
+    }
+
+    .card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #800000;
+      border-radius: 6px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+      page-break-inside: avoid;
+    }
+
+    .card.critical {
+      border-left-color: #e53e3e;
+    }
+
+    .card.high {
+      border-left-color: #dd6b20;
+    }
+
+    .card.medium {
+      border-left-color: #ecc94b;
+    }
+
+    .card.low {
+      border-left-color: #718096;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+
+    .card-title {
+      font-size: 11.5pt;
+      font-weight: 700;
+      color: #2d3748;
+    }
+
+    .card-file {
+      font-family: Consolas, "Liberation Mono", Menlo, Courier, monospace;
+      font-size: 8.5pt;
+      color: #800000;
+      margin-bottom: 8px;
+      background: #fff5f5;
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid #fed7d7;
+    }
+
+    code,
+    pre {
+      font-family: Consolas, "Liberation Mono", Menlo, Courier, monospace;
+      font-size: 8.5pt;
+    }
+
+    code {
+      background: #edf2f7;
+      padding: 1px 4px;
+      border-radius: 3px;
+      color: #c53030;
+    }
+
+    pre {
+      background: #1a202c;
+      color: #edf2f7;
+      padding: 10px 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 8px 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .recommendation {
+      background: #ebf8ff;
+      border-left: 3px solid #3182ce;
+      padding: 8px 12px;
+      font-size: 9pt;
+      color: #2b6cb0;
+      margin-top: 8px;
+      border-radius: 0 4px 4px 0;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- COVER PAGE -->
+  <div class="cover">
+    <div class="cover-logo">WISE <span class="red">PLAYER</span></div>
+    <div style="font-size: 10pt; color: #718096; letter-spacing: 2px; text-transform: uppercase;">Samsung Tizen TV &
+      Cross-Platform</div>
+    <div class="cover-title">Comprehensive Codebase Audit & Bug Report</div>
+    <div class="cover-subtitle">In-Depth Static Analysis, Runtime Defect Detection & Tizen OS Build Diagnostics</div>
+
+    <div class="meta-box">
+      <table>
+        <tr>
+          <td class="label">Project:</td>
+          <td>wiseplayertizen (Flutter Tizen)</td>
+        </tr>
+        <tr>
+          <td class="label">Date:</td>
+          <td>November 2026</td>
+        </tr>
+        <tr>
+          <td class="label">Target Platforms:</td>
+          <td>Samsung Tizen TV (api-version 6.5 / 8.0), Android TV, Web</td>
+        </tr>
+        <tr>
+          <td class="label">Audit Scope:</td>
+          <td>Architecture, Routes, DRM, State Management, APIs, Memory, Tizen Build</td>
+        </tr>
+        <tr>
+          <td class="label">Total Issues Found:</td>
+          <td><strong>16 Issues</strong> (6 Critical, 5 High, 4 Medium, 1 Low)</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- EXECUTIVE SUMMARY -->
+  <h1>1. Executive Summary</h1>
+  <p>
+    This document details the findings of an end-to-end security, runtime stability, and architecture audit conducted on
+    the <strong>Wise Player Tizen</strong> codebase. The application is an IPTV and Video Streaming client built with
+    Flutter for Samsung Tizen OS (Smart TVs), Android TV, and Web platforms.
+  </p>
+  <p>
+    During the review, <strong>16 distinct issues</strong> were identified across multiple layers:
+  </p>
+
+  <div class="summary-grid">
+    <div class="summary-col">
+      <div class="count count-critical">6</div>
+      <div class="lbl">Critical (Crashes / Build Failures)</div>
+    </div>
+    <div class="summary-col">
+      <div class="count count-high">5</div>
+      <div class="lbl">High (Data Leaks / Memory Leaks)</div>
+    </div>
+    <div class="summary-col">
+      <div class="count count-medium">4</div>
+      <div class="lbl">Medium (Dead Code / Stale UI)</div>
+    </div>
+    <div class="summary-col">
+      <div class="count count-low">1</div>
+      <div class="lbl">Low (Unused Imports / Deprecations)</div>
+    </div>
+  </div>
+
+  <p>
+    The most critical findings include:
+  </p>
+  <ul>
+    <li><strong>Build Failure on Tizen:</strong> The manifest targets Tizen 6.5, which fails because the native
+      rootstrap <code>iot-headed-6.5-device.core</code> is missing in Tizen Studio, while <code>Runner.csproj</code>
+      targets <code>tizen80</code>.</li>
+    <li><strong>Fatal Runtime Crashes:</strong> Invalid string-to-int fallback casting in <code>router.dart</code>, a
+      duplicate assignment to a <code>late final</code> variable in <code>tv_show_subscription_plan.dart</code>, and
+      premature <code>isEmpty</code> invocation on a nullable secret in <code>fetch_phone_info_mac.dart</code>.</li>
+    <li><strong>Security & Privacy Exposure:</strong> Hardcoded provider credentials (username & password) inside
+      <code>tv_upload_playlist_screen.dart</code> and <code>upload_playlist.dart</code> that discard user input.</li>
+    <li><strong>Platform Incompatibility:</strong> Use of <code>flutter_inappwebview</code> for PayPal checkout, which
+      has no Tizen OS engine implementation and crashes on TVs.</li>
+    <li><strong>Socket & Resource Leaks:</strong> Unclosed <code>HttpClient</code> instances in redirect resolution,
+      leading to connection exhaustion on embedded TVs.</li>
+  </ul>
+
+  <!-- QUICK REFERENCE TABLE -->
+  <h1>2. Summary of Identified Defects</h1>
+  <table class="styled-table">
+    <thead>
+      <tr>
+        <th style="width: 5%;">#</th>
+        <th style="width: 28%;">Issue Description</th>
+        <th style="width: 14%;">Severity</th>
+        <th style="width: 33%;">File Location</th>
+        <th style="width: 20%;">Category</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>Build Crash: Missing Rootstrap 6.5 & TargetFramework Mismatch</td>
+        <td><span class="badge badge-critical">Critical</span></td>
+        <td><code>tizen/tizen-manifest.xml</code> & <code>Runner.csproj</code></td>
+        <td>Tizen Build System</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>Fatal Type Cast Error: String Fallback assigned to <code>int resumeSecond</code></td>
+        <td><span class="badge badge-critical">Critical</span></td>
+        <td><code>lib/core/routes/router.dart:154</code></td>
+        <td>Navigation / Runtime</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>Fatal Crash: <code>LateInitializationError</code> in <code>didChangeDependencies</code></td>
+        <td><span class="badge badge-critical">Critical</span></td>
+        <td><code>tv_show_subscription_plan.dart:71,109</code></td>
+        <td>Lifecycle / State</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>Crash: Null-check ordering on <code>data['deviceSecret'].isEmpty</code></td>
+        <td><span class="badge badge-critical">Critical</span></td>
+        <td><code>fetch_phone_info_mac.dart:393</code></td>
+        <td>Authentication / Null Safety</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>Missing Tizen Plugin: <code>flutter_inappwebview</code> on TV</td>
+        <td><span class="badge badge-critical">Critical</span></td>
+        <td><code>pay_pal_chekout_screen.dart:60</code></td>
+        <td>Plugin Compatibility</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>Crash: Unhandled String / HTML response in Dio error handler</td>
+        <td><span class="badge badge-critical">Critical</span></td>
+        <td><code>api_services.dart:174</code> & <code>dio_client.dart:72</code></td>
+        <td>Network / Exception Handling</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td>Security Leak: Hardcoded Credentials & Discarded Playlist URL</td>
+        <td><span class="badge badge-high">High</span></td>
+        <td><code>tv_upload_playlist_screen.dart:96</code></td>
+        <td>Security & Data Integrity</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td>Memory / Socket Leak: Unclosed <code>HttpClient</code> in Redirect Resolution</td>
+        <td><span class="badge badge-high">High</span></td>
+        <td><code>api_repo.dart:193</code></td>
+        <td>Memory & Performance</td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td>Race Condition: Delayed Timer Wipes Active Stream State</td>
+        <td><span class="badge badge-high">High</span></td>
+        <td><code>wise_bloc.dart:430-441</code></td>
+        <td>State Management</td>
+      </tr>
+      <tr>
+        <td>10</td>
+        <td>HTTP Protocol Violation: GET request with body in <code>hitPostApiCureent</code></td>
+        <td><span class="badge badge-high">High</span></td>
+        <td><code>dio_client.dart:43-52</code></td>
+        <td>Network Layer</td>
+      </tr>
+      <tr>
+        <td>11</td>
+        <td>Token Refresh Race Condition during Concurrent 401 Responses</td>
+        <td><span class="badge badge-high">High</span></td>
+        <td><code>dio_client.dart:163-176</code></td>
+        <td>Authentication Race</td>
+      </tr>
+      <tr>
+        <td>12</td>
+        <td>Dead Code: Download Invoice PDF discards downloaded file</td>
+        <td><span class="badge badge-medium">Medium</span></td>
+        <td><code>api_repo.dart:449</code></td>
+        <td>Broken Functionality</td>
+      </tr>
+      <tr>
+        <td>13</td>
+        <td>UI Bug: TV Home Screen permanently stuck on "Fetching location…"</td>
+        <td><span class="badge badge-medium">Medium</span></td>
+        <td><code>wise_player_tv_home_screen.dart:80,777</code></td>
+        <td>User Interface</td>
+      </tr>
+      <tr>
+        <td>14</td>
+        <td>Undeclared Direct Dependency: <code>uuid</code> missing from <code>pubspec.yaml</code></td>
+        <td><span class="badge badge-medium">Medium</span></td>
+        <td><code>get_device_info.dart:11</code></td>
+        <td>Dependency Management</td>
+      </tr>
+      <tr>
+        <td>15</td>
+        <td>Hard Platform Exception on Windows / Desktop Environment</td>
+        <td><span class="badge badge-medium">Medium</span></td>
+        <td><code>get_device_info.dart:52</code></td>
+        <td>Multiplatform Support</td>
+      </tr>
+      <tr>
+        <td>16</td>
+        <td>Missing Export: <code>SimpleVideoScreen</code> imported but missing in <code>tv.video.dart</code></td>
+        <td><span class="badge badge-low">Low</span></td>
+        <td><code>router.dart:24</code></td>
+        <td>Static Analysis</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- DETAILED FINDINGS -->
+  <div style="page-break-before: always;"></div>
+  <h1>3. Detailed Defect Analysis & Fixes</h1>
+
+  <!-- ISSUE 1 -->
+  <div class="card critical">
+    <div class="card-header">
+      <span class="card-title">1. Build Failure: Missing Rootstrap 6.5 & TargetFramework Mismatch</span>
+      <span class="badge badge-critical">Critical</span>
+    </div>
+    <div class="card-file">tizen/tizen-manifest.xml:5 | tizen/Runner.csproj:5</div>
+    <p><strong>Root Cause:</strong></p>
+    <p>
+      The manifest was updated to <code>api-version="6.5"</code> with <code>&lt;profile name="tv"/&gt;</code>, but Tizen
+      Studio on the development machine only has the <strong>Tizen 8.0</strong> rootstrap installed
+      (<code>tizen-8.0-device.core</code>). Furthermore, <code>Runner.csproj</code> specifies
+      <code>&lt;TargetFramework&gt;tizen80&lt;/TargetFramework&gt;</code>. When <code>flutter-tizen build tpk</code>
+      executes, it tries to compile against <code>iot-headed-6.5-device.core</code> which does not exist, causing the
+      build to fail:
+    </p>
+    <pre>exception:Error: The rootstrap iot-headed-6.5-device.core could not be found.
+To install missing package(s), run:
+C:\tizen-studio\package-manager\package-manager-cli.exe install IOT-Headed-6.5-NativeAppDevelopment-CLI</pre>
+    <p><strong>Impact:</strong> The application cannot be compiled or packaged into a <code>.tpk</code> for testing or
+      deployment on TV devices.</p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Either revert <code>api-version="8.0"</code> and
+      <code>&lt;profile name="common"/&gt;</code> in <code>tizen-manifest.xml</code> to match the installed Tizen 8.0
+      SDK, OR install the Tizen 6.5 Native package via Tizen Package Manager.
+    </div>
+  </div>
+
+  <!-- ISSUE 2 -->
+  <div class="card critical">
+    <div class="card-header">
+      <span class="card-title">2. Fatal Type Cast Error: String Fallback assigned to
+        <code>int resumeSecond</code></span>
+      <span class="badge badge-critical">Critical</span>
+    </div>
+    <div class="card-file">lib/core/routes/router.dart:154</div>
+    <p><strong>Root Cause:</strong></p>
+    <p>In the router definition for <code>AppRoutes.videoPlayer</code>:</p>
+    <pre>final int resumeSecond = data['resumeSecond'] ?? "";</pre>
+    <p>
+      The fallback value when <code>data['resumeSecond']</code> is null is the empty string <code>""</code> instead of
+      <code>0</code>. Assigning a <code>String</code> to an <code>int</code> variable triggers an immediate runtime
+      exception:
+      <code>TypeError: type 'String' is not a subtype of type 'int'</code>.
+    </p>
+    <p><strong>Impact:</strong> Any navigation to the video player where <code>resumeSecond</code> is null immediately
+      crashes the application.</p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Change line 154 to:
+      <pre>final int resumeSecond = (data['resumeSecond'] as num?)?.toInt() ?? 0;</pre>
+    </div>
+  </div>
+
+  <!-- ISSUE 3 -->
+  <div class="card critical">
+    <div class="card-header">
+      <span class="card-title">3. Fatal Crash: <code>LateInitializationError</code> on <code>_isPhone</code></span>
+      <span class="badge badge-critical">Critical</span>
+    </div>
+    <div class="card-file">lib/presentation/screen_view/common/subscription/tv_show_subscription_plan.dart:71,109</div>
+    <p><strong>Root Cause:</strong></p>
+    <p>
+      The state variable is declared as:
+    </p>
+    <pre>late final bool _isPhone;</pre>
+    <p>
+      And inside <code>didChangeDependencies()</code>:
+    </p>
+    <pre>_isPhone = isPhoneWidth(context);</pre>
+    <p>
+      In Flutter, <code>didChangeDependencies()</code> is invoked whenever inherited widgets (Theme, MediaQuery, Locale)
+      update. Because the field is declared <code>late final</code>, any second invocation of
+      <code>didChangeDependencies()</code> throws:
+      <code>LateInitializationError: Field '_isPhone' has already been initialized.</code>
+    </p>
+    <p><strong>Impact:</strong> The subscription screen crashes whenever screen dimensions change or keyboard/theme
+      toggles.</p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Remove the <code>final</code> modifier:
+      <pre>bool _isPhone = false;</pre>
+    </div>
+  </div>
+
+  <!-- ISSUE 4 -->
+  <div class="card critical">
+    <div class="card-header">
+      <span class="card-title">4. Crash: Null Pointer on <code>isEmpty</code> in Device Registration</span>
+      <span class="badge badge-critical">Critical</span>
+    </div>
+    <div class="card-file">lib/presentation/screen_view/common/auth/fetch_phone_info_mac.dart:393</div>
+    <p><strong>Root Cause:</strong></p>
+    <p>Line 393 checks device credentials before registration:</p>
+    <pre>if (data['deviceSecret'].isEmpty || data['deviceSecret'] == null)</pre>
+    <p>
+      In Dart, boolean OR (<code>||</code>) evaluates left-to-right. On a first install when <code>deviceSecret</code>
+      is null, calling <code>.isEmpty</code> on <code>null</code> throws:
+      <code>NoSuchMethodError: The getter 'isEmpty' was called on null</code>.
+    </p>
+    <p><strong>Impact:</strong> First-time device registration can crash before creating an account on the server.</p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Check for null first, or use safe navigation:
+      <pre>if (data['deviceSecret'] == null || (data['deviceSecret'] as String).isEmpty)</pre>
+    </div>
+  </div>
+
+  <!-- ISSUE 5 -->
+  <div class="card critical">
+    <div class="card-header">
+      <span class="card-title">5. Missing Tizen Plugin: <code>flutter_inappwebview</code> on TV</span>
+      <span class="badge badge-critical">Critical</span>
+    </div>
+    <div class="card-file">lib/presentation/screen_view/common/subscription/pay_pal_chekout_screen.dart:60</div>
+    <p><strong>Root Cause:</strong></p>
+    <p>
+      <code>PayPalCheckoutScreen</code> attempts to instantiate an <code>InAppWebView</code>.
+      <code>flutter_inappwebview</code> does not have a Samsung Tizen platform channel. Calling it on Tizen throws
+      <code>MissingPluginException</code>.
+    </p>
+    <p><strong>Impact:</strong> Paying via PayPal inside the TV app crashes the screen.</p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> On TV devices, route exclusively to <code>QrCheckoutTvScreen</code> (which allows
+      mobile phone QR code payment) and disable direct webview checkouts on TV profiles.
+    </div>
+  </div>
+
+  <!-- ISSUE 6 -->
+  <div class="card critical">
+    <div class="card-header">
+      <span class="card-title">6. Crash: Unhandled String / HTML Error Response in Dio Error Handler</span>
+      <span class="badge badge-critical">Critical</span>
+    </div>
+    <div class="card-file">lib/presentation/screen_view/bloc/api_services/api_services.dart:174 & dio_client.dart:72
+    </div>
+    <p><strong>Root Cause:</strong></p>
+    <p>The error handler expects all error responses from Dio to be JSON Maps:</p>
+    <pre>e.response?.data['message'].toString()</pre>
+    <p>
+      When an upstream streaming server, proxy, or Cloudflare returns an HTML error page (e.g.
+      <code>502 Bad Gateway</code> or <code>504 Gateway Timeout</code>), <code>e.response?.data</code> is a
+      <code>String</code>. Indexing <code>['message']</code> on a String throws
+      <code>NoSuchMethodError: Class 'String' has no instance method '[]'</code>, causing the error handler to crash.
+    </p>
+    <p><strong>Impact:</strong> Unhandled exceptions crash the Bloc layer on server hiccups or offline modes.</p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Safely inspect data type before map indexing:
+      <pre>final data = e.response?.data;
+final msg = (data is Map) ? data['message']?.toString() : null;
+errorMessage = msg ?? "Server error occurred";</pre>
+    </div>
+  </div>
+
+  <!-- ISSUE 7 -->
+  <div class="card high">
+    <div class="card-header">
+      <span class="card-title">7. Security & Integrity: Hardcoded Credentials & Discarded Playlist URL</span>
+      <span class="badge badge-high">High</span>
+    </div>
+    <div class="card-file">lib/presentation/screen_view/common/upload_playlist/tv_upload_playlist_screen.dart:96 &
+      upload_playlist.dart:324</div>
+    <p><strong>Root Cause:</strong></p>
+    <p>
+      In both upload screens, the submission logic replaces the user's input with a hardcoded IPTV URL containing plain
+      credentials:
+    </p>
+    <pre>final res = await apiService.hitPostApi(
+  reqData: {
+    "name": nameCtrl.text.toString(),
+    "m3uUrl": "http://line.vpnworld.pro/get.php?username=15F2C2&password=512608&type=m3u_plus&output=mpegts",
+  },
+  endpoint: "/api/playlist/m3u",
+);</pre>
+    <p><strong>Impact:</strong> The user's entered playlist URL is ignored, and private IPTV credentials are hardcoded
+      and leaked into version control and device binaries.</p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Pass <code>urlCtrl.text.trim()</code> instead of the hardcoded test URL, and revoke
+      any exposed credentials.
+    </div>
+  </div>
+
+  <!-- ISSUE 8 -->
+  <div class="card high">
+    <div class="card-header">
+      <span class="card-title">8. Socket & Memory Leak: Unclosed <code>HttpClient</code> in Redirect Resolution</span>
+      <span class="badge badge-high">High</span>
+    </div>
+    <div class="card-file">lib/presentation/screen_view/bloc/repo/api_repo.dart:193</div>
+    <p><strong>Root Cause:</strong></p>
+    <p>
+      Inside <code>_resolveRedirect()</code>, an instance of <code>HttpClient()</code> is allocated on every redirection
+      loop, but <code>client.close(force: true)</code> is never called.
+    </p>
+    <p><strong>Impact:</strong> On Tizen Smart TVs with strict OS-level socket limits, rapidly switching channels leaks
+      sockets until reaching socket exhaustion (<code>SocketException: OS Error: Too many open files</code>), causing
+      video playback to fail completely until the app restarts.</p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Wrap client usage in a <code>try / finally</code> block:
+      <pre>final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
+try {
+  final request = await client.getUrl(uri);
+  ...
+} finally {
+  client.close(force: true);
+}</pre>
+    </div>
+  </div>
+
+  <!-- ISSUE 9 -->
+  <div class="card high">
+    <div class="card-header">
+      <span class="card-title">9. Race Condition: Delayed 2-Second Timer Wipes Active Stream State</span>
+      <span class="badge badge-high">High</span>
+    </div>
+    <div class="card-file">lib/presentation/screen_view/bloc/wise_bloc.dart:430-441</div>
+    <p><strong>Root Cause:</strong></p>
+    <p>
+      When a stream opens, <code>ResetVideoUrlEvent</code> is dispatched. The bloc handler waits for a 2-second delay
+      and then wipes the state:
+    </p>
+    <pre>_resetVideoUrlEvent(ResetVideoUrlEvent event, Emitter&lt;WiseState&gt; emit) async {
+  await Future.delayed(const Duration(seconds: 2), () async {
+    emit(state.copyWith(videoUrl: '', isVideoLoaded: false, selectedVideo: VideosOnPerticulerChannelModel.empty()));
+  });
+}</pre>
+    <p><strong>Impact:</strong> If a user navigates between channels quickly, this delayed timer executes while the new
+      stream is loading and destroys the new stream's URL and channel metadata.</p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Remove the delayed state wipe. Reset state deterministically when leaving the player
+      screen or navigating to a new video.
+    </div>
+  </div>
+
+  <!-- ISSUE 10 -->
+  <div class="card high">
+    <div class="card-header">
+      <span class="card-title">10. HTTP Protocol Violation: GET Request with Body in
+        <code>hitPostApiCureent</code></span>
+      <span class="badge badge-high">High</span>
+    </div>
+    <div class="card-file">lib/presentation/screen_view/bloc/api_services/dio_client.dart:43-52</div>
+    <p><strong>Root Cause:</strong></p>
+    <p>
+      The function named <code>hitPostApiCureent</code> (note typo in Current) accepts <code>reqData</code>, but
+      executes <code>dio.get(endpoint, data: reqData)</code>. Sending a payload body with HTTP GET violates RFC 7231 and
+      is rejected or stripped by standard web servers, proxies, and CDNs.
+    </p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Change <code>dio.get</code> to <code>dio.post</code>.
+    </div>
+  </div>
+
+  <!-- ISSUE 11 -->
+  <div class="card high">
+    <div class="card-header">
+      <span class="card-title">11. Token Refresh Race Condition during Concurrent 401 Responses</span>
+      <span class="badge badge-high">High</span>
+    </div>
+    <div class="card-file">lib/presentation/screen_view/bloc/api_services/dio_client.dart:163-176</div>
+    <p><strong>Root Cause:</strong></p>
+    <p>
+      When a session token expires, multiple parallel requests (e.g. initial playlist categories, user status, pinned
+      playlists) simultaneously trigger 401 errors. <code>onError</code> spawns multiple independent
+      <code>_refreshToken()</code> calls concurrently without a mutex or request queue.
+    </p>
+    <p><strong>Impact:</strong> The server invalidates the refresh token on the first exchange, causing subsequent
+      refresh attempts to fail and prematurely logging the user out.</p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Implement a single in-flight <code>Future&lt;String?&gt;</code> lock for refresh
+      token operations.
+    </div>
+  </div>
+
+  <!-- ISSUE 12 -->
+  <div class="card medium">
+    <div class="card-header">
+      <span class="card-title">12. Broken Feature: Download Invoice PDF Discards Downloaded File</span>
+      <span class="badge badge-medium">Medium</span>
+    </div>
+    <div class="card-file">lib/presentation/screen_view/bloc/repo/api_repo.dart:449</div>
+    <p><strong>Root Cause:</strong></p>
+    <p>
+      In <code>downloadInvoicePdf()</code>, the PDF binary is retrieved via HTTP GET bytes, but saving the file is
+      commented out:
+    </p>
+    <pre>//await _savePdf(res.data, invoiceId);</pre>
+    <p><strong>Impact:</strong> Clicking "Download Invoice" consumes bandwidth and API resources, but does not save or
+      display any invoice to the user.</p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Re-enable saving to application storage or opening with <code>open_filex</code> /
+      platform file viewer.
+    </div>
+  </div>
+
+  <!-- ISSUE 13 -->
+  <div class="card medium">
+    <div class="card-header">
+      <span class="card-title">13. UI Bug: TV Home Screen Stuck on "Fetching location…"</span>
+      <span class="badge badge-medium">Medium</span>
+    </div>
+    <div class="card-file">lib/presentation/screen_view/common/auth/wise_player_tv_home_screen.dart:80,777</div>
+    <p><strong>Root Cause:</strong></p>
+    <p>
+      <code>lib/location.dart</code> is completely commented out, and the location lookup call in
+      <code>wise_player_tv_home_screen.dart</code> is disabled. However, the UI continues to render
+      <code>_locationText</code>, which never updates from its default state:
+      <code>String _locationText = 'Fetching location…';</code>
+    </p>
+    <p><strong>Impact:</strong> The user sees a permanent loading label on their TV screen.</p>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Set a clean default (e.g., app name or date/time banner) or re-enable the IP-based
+      geolocation fallback.
+    </div>
+  </div>
+
+  <!-- ISSUE 14 & 15 & 16 -->
+  <div class="card medium">
+    <div class="card-header">
+      <span class="card-title">14, 15 & 16. Dependency & Platform Support Issues</span>
+      <span class="badge badge-medium">Medium</span>
+    </div>
+    <div class="card-file">lib/core/utils/get_device_info.dart | lib/core/routes/router.dart</div>
+    <p><strong>Summary of Items:</strong></p>
+    <ul>
+      <li><strong>14. Undeclared Dependency:</strong> <code>package:uuid</code> is directly imported in
+        <code>get_device_info.dart:11</code>, but is not listed in <code>pubspec.yaml</code>. Any change in transitive
+        dependencies will break the build.</li>
+      <li><strong>15. Hard Desktop Crash:</strong> <code>currentOperatingSystem()</code> throws
+        <code>UnsupportedError('Unsupported platform: windows')</code>, preventing developers from testing on Windows or
+        desktop.</li>
+      <li><strong>16. Missing Symbol:</strong> <code>router.dart:24</code> imports <code>SimpleVideoScreen</code> via
+        <code>show</code>, but <code>SimpleVideoScreen</code> does not exist in <code>tv.video.dart</code>.</li>
+    </ul>
+    <div class="recommendation">
+      <strong>Resolution:</strong> Add <code>uuid: ^4.5.1</code> to <code>pubspec.yaml</code>, provide a desktop
+      fallback in <code>get_device_info.dart</code>, and remove the nonexistent symbol from <code>router.dart</code>.
+    </div>
+  </div>
+
+  <!-- CONCLUSION & RECOMMENDATIONS -->
+  <h1>4. Recommended Action Plan</h1>
+  <table class="styled-table">
+    <thead>
+      <tr>
+        <th>Phase</th>
+        <th>Actions</th>
+        <th>Target Timeline</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Phase 1: Build & Crash Fixes</strong></td>
+        <td>
+          1. Fix <code>resumeSecond</code> fallback in <code>router.dart</code>.<br>
+          2. Fix <code>_isPhone</code> declaration in <code>tv_show_subscription_plan.dart</code>.<br>
+          3. Correct null-check ordering in <code>fetch_phone_info_mac.dart</code>.<br>
+          4. Align Tizen API version (set to 8.0 or install 6.5 rootstrap).
+        </td>
+        <td>Immediate (Day 1)</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 2: Security & Network Fixes</strong></td>
+        <td>
+          1. Remove hardcoded M3U URL and passwords in <code>tv_upload_playlist_screen.dart</code>.<br>
+          2. Close <code>HttpClient</code> in <code>_resolveRedirect()</code>.<br>
+          3. Protect Dio error handler against String/HTML responses.<br>
+          4. Add token-refresh concurrency lock.
+        </td>
+        <td>Day 2</td>
+      </tr>
+      <tr>
+        <td><strong>Phase 3: Clean-up & TV UX</strong></td>
+        <td>
+          1. Remove 2-second delayed state wipe in <code>wise_bloc.dart</code>.<br>
+          2. Add <code>uuid</code> to <code>pubspec.yaml</code>.<br>
+          3. Replace static "Fetching location…" placeholder on TV Home Screen.<br>
+          4. Route TV PayPal directly to QR code checkout.
+        </td>
+        <td>Day 3</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top: 40px; text-align: center; color: #a0aec0; font-size: 8.5pt;">
+    Wise Player Tizen - Technical Audit Report &bull; Generated November 2026
+  </div>
+
+</body>
+
+</html>

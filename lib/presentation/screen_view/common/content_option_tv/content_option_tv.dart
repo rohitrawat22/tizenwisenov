@@ -1,3 +1,12 @@
+import 'dart:async';
+import 'dart:developer';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
@@ -15,6 +24,7 @@ import 'package:wiseplayertizen/core/utils/exit_dialog.dart';
 import 'package:wiseplayertizen/core/utils/get_dymention.dart';
 import 'package:wiseplayertizen/core/utils/snackbar.dart';
 import 'package:wiseplayertizen/core/utils/toast_service.dart';
+import 'package:wiseplayertizen/core/utils/tv_detector.dart';
 import 'package:wiseplayertizen/presentation/screen_view/bloc/api_services/api_services.dart';
 import 'package:wiseplayertizen/presentation/screen_view/bloc/wise_bloc.dart';
 import 'package:wiseplayertizen/presentation/screen_view/bloc/repo/api_repo.dart';
@@ -24,6 +34,10 @@ import 'package:wiseplayertizen/presentation/screen_view/common/upload_playlist/
 import 'package:wiseplayertizen/core/utils/breakpoints.dart';
 import 'package:wiseplayertizen/core/widgets/geo_location_banner.dart';
 
+import '../../../../core/widgets/laderScreen.dart';
+import '../../../../data/local_storage/pin_security_service.dart';
+import '../../../widgets/pin_input_dialog.dart';
+import '../../bloc/model/get_playList_model.dart';
 import '../../../../core/widgets/laderScreen.dart';
 import '../../../../data/local_storage/pin_security_service.dart';
 import '../../../widgets/pin_input_dialog.dart';
@@ -39,11 +53,9 @@ class CategoryPage extends StatefulWidget {
 
 class _CategoryPageState extends State<CategoryPage>
     with SingleTickerProviderStateMixin {
-  ApiService apiService = ApiService();
   final FocusNode _refreshFocusNode = FocusNode();
   final FocusNode _dropdownFocusNode = FocusNode();
   final FocusNode _verifyButtonFocusNode = FocusNode();
-  final FocusNode _backButtonFocusNode = FocusNode();
   final FocusNode _liveTvFocusNode = FocusNode();
   final FocusNode _moviesFocusNode = FocusNode();
   final FocusNode _seriesFocusNode = FocusNode();
@@ -56,8 +68,8 @@ class _CategoryPageState extends State<CategoryPage>
   final ValueNotifier<bool> _dropdownFocused = ValueNotifier(false);
   bool _isDropdownFocused = false;
 
-  // No longer `late final` — it's now set in didChangeDependencies(),
-  // not initState(), so it can't be final-assigned at declaration time.
+  // Set in didChangeDependencies(), not initState(), because MediaQuery /
+  // InheritedWidget lookups are not safe inside initState().
   bool _isPhone = false;
   bool _isPhoneInitialized = false;
 
@@ -69,17 +81,15 @@ class _CategoryPageState extends State<CategoryPage>
   void initState() {
     super.initState();
 
-    // ── REMOVED from here: _isPhone = isPhoneWidth(context); ──
-    // MediaQuery.of(context) (and any InheritedWidget lookup) is NOT safe
-    // inside initState() — the element isn't fully attached to the tree yet.
-    // It's now read in didChangeDependencies() below instead.
-
     _dropdownFocusNode.addListener(_onDropdownFocusChange);
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat();
-    getPlaylist();
+    // Check device PIN gate on every app launch before loading content.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _checkPinAndLoad();
+    });
 
     // ── D-pad + Enter navigation setup — uses shared wireDpadNode helper ──
     //
@@ -91,19 +101,8 @@ class _CategoryPageState extends State<CategoryPage>
     //   Right column:          [Live TV] [Movies]
     //                          [Series ] [Fav   ]
     wireDpadNode(
-      _backButtonFocusNode,
-      down: _dropdownFocusNode,
-      right: _dropdownFocusNode,
-      onSelect: () {
-        if (Navigator.of(context).canPop())
-          Navigator.of(context).pop();
-        else
-          GoRouter.of(context).pop();
-      },
-    );
-    wireDpadNode(
       _dropdownFocusNode,
-      up: _backButtonFocusNode,
+      lockUp: true,
       down: _addNewPlaylistFocusNode,
       right: _liveTvFocusNode,
       lockLeft: true,
@@ -164,8 +163,8 @@ class _CategoryPageState extends State<CategoryPage>
       right: _liveTvFocusNode,
       down: _languageFocusNode,
       onSelect: () async {
-        setState(() => selectedPlayList = null);
-        await getPlaylist();
+        selectedPlayList = null;
+        await _checkPinAndLoad();
       },
     );
     wireDpadNode(
@@ -197,7 +196,9 @@ class _CategoryPageState extends State<CategoryPage>
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _dropdownFocusNode.requestFocus();
+      if (TvDetector.isTVDevice) {
+        _dropdownFocusNode.requestFocus();
+      }
     });
   }
 
@@ -205,9 +206,6 @@ class _CategoryPageState extends State<CategoryPage>
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Safe place to read MediaQuery / any InheritedWidget for the first time.
-    // Runs once right after initState(), and again if an inherited
-    // dependency changes later — the flag keeps the "capture once" behavior
-    // your dispose() logic relies on.
     if (!_isPhoneInitialized) {
       _isPhone = isPhoneWidth(context);
       _isPhoneInitialized = true;
@@ -274,7 +272,6 @@ class _CategoryPageState extends State<CategoryPage>
     _dropdownFocusNode.dispose();
     _refreshFocusNode.dispose();
     _verifyButtonFocusNode.dispose();
-    _backButtonFocusNode.dispose();
     _liveTvFocusNode.dispose();
     _moviesFocusNode.dispose();
     _seriesFocusNode.dispose();
@@ -309,6 +306,7 @@ class _CategoryPageState extends State<CategoryPage>
       child: Scaffold(
         backgroundColor: AppColor.background,
         appBar: AppBar(
+          automaticallyImplyLeading: false,
           backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: null,
@@ -332,25 +330,6 @@ class _CategoryPageState extends State<CategoryPage>
             ),
           ),
           centerTitle: true,
-          leadingWidth: 70,
-          leading: Padding(
-            padding: const EdgeInsets.only(left: 16.0),
-            child: FocusableAppBarAction(
-              focusNode: _backButtonFocusNode,
-              onPressed: () {
-                if (Navigator.of(context).canPop()) {
-                  Navigator.of(context).pop();
-                } else {
-                  GoRouter.of(context).pop();
-                }
-              },
-              icon: const Icon(
-                Icons.arrow_back_rounded,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-          ),
         ),
         body: Container(
           decoration: const BoxDecoration(
@@ -373,11 +352,15 @@ class _CategoryPageState extends State<CategoryPage>
               listener: (context, state) {
                 if (state.status == Status.littleError ||
                     state.status == Status.error) {
-                  ToastService.showError(
-                    state.errorMessage.isNotEmpty
-                        ? state.errorMessage
-                        : s.somethingWentWrong,
-                  );
+                  final msg = state.errorMessage;
+                  if (msg.contains("unexpected error") ||
+                      msg.contains("contact support")) {
+                    ToastService.showWarning(
+                      "Provider offline or blocked by ISP. Try VPN if streams don't load.",
+                    );
+                  } else if (msg.isNotEmpty) {
+                    ToastService.showError(msg);
+                  }
                 }
               },
               buildWhen: (previous, current) =>
@@ -428,38 +411,54 @@ class _CategoryPageState extends State<CategoryPage>
                                 children: [
                                   // ── Left Column: System controls & metadata ──
                                   Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.start,
-                                      children: [
-                                        // --- Premium Playlist Selector ---
-                                        _buildPlaylistSelector(
-                                          playList,
-                                          state,
-                                          s,
-                                          isTV,
-                                          isMobile,
-                                        ),
-                                        const SizedBox(height: 14),
-                                        // Action Buttons (Add, Refresh, Lang, Exit)
-                                        _buildActionButtonsRow(
-                                          isTV,
-                                          isMobile,
-                                          s,
-                                        ),
-                                        const SizedBox(height: 16),
-                                        // MAC Address
-                                        _buildMACAddress(
-                                          isTV,
-                                          isMobile,
-                                          macAddress,
-                                        ),
-                                        const SizedBox(height: 10),
-                                        // Footer Message
-                                        _buildFooter(isTV, isMobile),
-                                      ],
+                                    child: SingleChildScrollView(
+                                      physics: const ClampingScrollPhysics(),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // --- Premium Playlist Selector ---
+                                          _buildPlaylistSelector(
+                                            playList,
+                                            state,
+                                            s,
+                                            isTV,
+                                            isMobile,
+                                          ),
+                                          SizedBox(
+                                            height:
+                                                (constraints.maxHeight * 0.04)
+                                                    .clamp(4.0, 14.0),
+                                          ),
+                                          // Action Buttons (Add, Refresh, Lang, Exit)
+                                          _buildActionButtonsRow(
+                                            isTV,
+                                            isMobile,
+                                            s,
+                                          ),
+                                          SizedBox(
+                                            height:
+                                                (constraints.maxHeight * 0.04)
+                                                    .clamp(4.0, 16.0),
+                                          ),
+                                          // MAC Address
+                                          _buildMACAddress(
+                                            isTV,
+                                            isMobile,
+                                            macAddress,
+                                          ),
+                                          SizedBox(
+                                            height:
+                                                (constraints.maxHeight * 0.025)
+                                                    .clamp(4.0, 10.0),
+                                          ),
+                                          // Footer Message
+                                          _buildFooter(isTV, isMobile),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 24),
@@ -565,7 +564,6 @@ class _CategoryPageState extends State<CategoryPage>
       context: context,
       builder: (context) {
         return _PlaylistManagementDialog(
-          playList: playList,
           selectedPlayList: selectedPlayList,
           onOpenPinSettings: () {
             Navigator.pop(context);
@@ -606,12 +604,14 @@ class _CategoryPageState extends State<CategoryPage>
         Expanded(
           child: ValueListenableBuilder<bool>(
             valueListenable: _dropdownFocused,
-            builder: (context, isFocused, _) {
+            builder: (context, isFocusedRaw, _) {
+              final isFocused = TvDetector.isTVDevice && isFocusedRaw;
               return AnimatedScale(
                 scale: isFocused ? 1.03 : 1.0,
                 duration: const Duration(milliseconds: 80),
                 child: InkWell(
-                  focusNode: _dropdownFocusNode,
+                  focusNode: TvDetector.isTVDevice ? _dropdownFocusNode : null,
+                  canRequestFocus: TvDetector.isTVDevice,
                   autofocus: false,
                   onTap: () => _openPlaylistManagementDialog(playList),
                   borderRadius: BorderRadius.circular(16),
@@ -714,104 +714,6 @@ class _CategoryPageState extends State<CategoryPage>
     );
   }
 
-  Widget _buildVerifyButton(WiseState state, S s, bool isTV, bool isMobile) {
-    final isVerified = state.isValidPlayList;
-    final double selectorHeight = isTV ? 56 : (isMobile ? 44 : 48);
-    return AnimatedBuilder(
-      animation: _verifyButtonFocusNode,
-      builder: (context, _) {
-        final isFocused = _verifyButtonFocusNode.hasFocus;
-        return AnimatedScale(
-          scale: isFocused ? 1.05 : 1.0,
-          duration: const Duration(milliseconds: 80),
-          child: InkWell(
-            focusNode: _verifyButtonFocusNode,
-            borderRadius: BorderRadius.circular(20),
-            onTap: () {
-              if (selectedPlayList == null) {
-                snackBar(context, s.choosePlaylistWarning, Colors.red);
-                return;
-              }
-              if (selectedPlayList!.id!.isNotEmpty) {
-                BlocProvider.of<WiseBloc>(context).add(
-                  ValidPlayListCheckEvent(playListId: selectedPlayList!.id!),
-                );
-              } else {
-                ToastService.showWarning(s.selectValidPlaylistToVerify);
-              }
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 80),
-              height: selectorHeight,
-              padding: EdgeInsets.symmetric(horizontal: isTV ? 24 : 16),
-              decoration: BoxDecoration(
-                gradient: isFocused
-                    ? (isVerified
-                          ? const LinearGradient(
-                              colors: [Color(0xFF22C55E), Color(0xFF15803D)],
-                            )
-                          : const LinearGradient(
-                              colors: [Color(0xFFE50914), Color(0xFFB9090B)],
-                            ))
-                    : (isVerified
-                          ? const LinearGradient(
-                              colors: [Color(0xFF142B1B), Color(0xFF0F1E13)],
-                            )
-                          : const LinearGradient(
-                              colors: [Color(0xFF1E1E1E), Color(0xFF141414)],
-                            )),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isFocused
-                      ? Colors.white
-                      : (isVerified
-                            ? const Color(0xFF22C55E).withOpacity(0.3)
-                            : Colors.white.withOpacity(0.08)),
-                  width: isFocused ? 2.5 : 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: isFocused
-                        ? (isVerified
-                              ? const Color(0xFF22C55E).withOpacity(0.4)
-                              : const Color(0xFFE50914).withOpacity(0.4))
-                        : Colors.black.withOpacity(0.3),
-                    blurRadius: isFocused ? 20 : 10,
-                    spreadRadius: 0,
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (isVerified)
-                    const Padding(
-                      padding: EdgeInsets.only(right: 6),
-                      child: Icon(
-                        Icons.check_circle,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                  Text(
-                    isVerified ? s.verified : s.verify,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: isTV ? 15 : 13,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   //--------------------------------------------------------------------------------------------------------------------
 
   goDashboard({
@@ -844,6 +746,10 @@ class _CategoryPageState extends State<CategoryPage>
   }
 
   List<_MenuItemModel> _getMenuItems(WiseState state, S s) {
+    final activePlaylist =
+        selectedPlayList ??
+        (state.playLists.isNotEmpty ? state.playLists.first : null);
+
     return [
       _MenuItemModel(
         image: 'assets/icons/live-tv.png',
@@ -854,19 +760,13 @@ class _CategoryPageState extends State<CategoryPage>
           end: Alignment.bottomRight,
         ),
         onTap: () async {
-          Map<String, dynamic> data = await SharedPref.getUserDeviceInfo();
-          debugPrint(data['deviceSecret']);
-          debugPrint(data['token']);
-          if (selectedPlayList == null || selectedPlayList!.id!.isEmpty) {
+          if (activePlaylist == null || (activePlaylist.id?.isEmpty ?? true)) {
             snackBar(context, s.choosePlaylistWarning, Colors.red);
             return;
-          } else if (state.isValidPlayList) {
-            if (state.status != Status.loading) {
-              log("Live TV playlist id: ${selectedPlayList!.id!}");
-              goDashboard(isLiveTv: true, playListId: selectedPlayList!.id!);
-            }
-          } else {
-            snackBar(context, s.verifyPlaylistFirst, Colors.red);
+          }
+          if (state.status != Status.loading) {
+            log("Live TV playlist id: ${activePlaylist.id!}");
+            goDashboard(isLiveTv: true, playListId: activePlaylist.id!);
           }
         },
       ),
@@ -879,14 +779,11 @@ class _CategoryPageState extends State<CategoryPage>
           end: Alignment.bottomRight,
         ),
         onTap: () {
-          if (selectedPlayList == null || selectedPlayList!.id!.isEmpty) {
+          if (activePlaylist == null || (activePlaylist.id?.isEmpty ?? true)) {
             snackBar(context, s.choosePlaylistWarning, Colors.red);
             return;
-          } else if (state.isValidPlayList) {
-            goDashboard(isMovies: true, playListId: selectedPlayList!.id!);
-          } else {
-            snackBar(context, s.verifyPlaylistFirst, Colors.red);
           }
+          goDashboard(isMovies: true, playListId: activePlaylist.id!);
         },
       ),
       _MenuItemModel(
@@ -898,14 +795,11 @@ class _CategoryPageState extends State<CategoryPage>
           end: Alignment.bottomRight,
         ),
         onTap: () {
-          if (selectedPlayList == null || selectedPlayList!.id!.isEmpty) {
+          if (activePlaylist == null || (activePlaylist.id?.isEmpty ?? true)) {
             snackBar(context, s.choosePlaylistWarning, Colors.red);
             return;
-          } else if (state.isValidPlayList) {
-            goDashboard(isSeries: true, playListId: selectedPlayList!.id!);
-          } else {
-            snackBar(context, s.verifyPlaylistFirst, Colors.red);
           }
+          goDashboard(isSeries: true, playListId: activePlaylist.id!);
         },
       ),
       _MenuItemModel(
@@ -939,59 +833,68 @@ class _CategoryPageState extends State<CategoryPage>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        const spacing = 16.0;
+        final spacing = (constraints.maxWidth * 0.03).clamp(8.0, 16.0);
+        final vSpacing = (constraints.maxHeight * 0.04).clamp(6.0, 16.0);
         final cardWidth = (constraints.maxWidth - spacing) / 2;
-        final cardHeight = isTV ? 160.0 : 130.0;
+        final double maxH = isTV ? 160.0 : 130.0;
+        final double computedHeight =
+            (constraints.maxHeight.isFinite && constraints.maxHeight > 0)
+            ? ((constraints.maxHeight - vSpacing) / 2).clamp(75.0, maxH)
+            : (isTV ? 160.0 : 130.0);
+        final cardHeight = computedHeight;
 
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildMainMenuCard(
-                  item: menuItems[0],
-                  index: 0,
-                  isTV: isTV,
-                  isMobile: isMobile,
-                  width: cardWidth,
-                  height: cardHeight,
-                ),
-                const SizedBox(width: spacing),
-                _buildMainMenuCard(
-                  item: menuItems[1],
-                  index: 1,
-                  isTV: isTV,
-                  isMobile: isMobile,
-                  width: cardWidth,
-                  height: cardHeight,
-                ),
-              ],
-            ),
-            const SizedBox(height: spacing),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildMainMenuCard(
-                  item: menuItems[2],
-                  index: 2,
-                  isTV: isTV,
-                  isMobile: isMobile,
-                  width: cardWidth,
-                  height: cardHeight,
-                ),
-                const SizedBox(width: spacing),
-                _buildMainMenuCard(
-                  item: menuItems[3],
-                  index: 3,
-                  isTV: isTV,
-                  isMobile: isMobile,
-                  width: cardWidth,
-                  height: cardHeight,
-                ),
-              ],
-            ),
-          ],
+        return SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildMainMenuCard(
+                    item: menuItems[0],
+                    index: 0,
+                    isTV: isTV,
+                    isMobile: isMobile,
+                    width: cardWidth,
+                    height: cardHeight,
+                  ),
+                  SizedBox(width: spacing),
+                  _buildMainMenuCard(
+                    item: menuItems[1],
+                    index: 1,
+                    isTV: isTV,
+                    isMobile: isMobile,
+                    width: cardWidth,
+                    height: cardHeight,
+                  ),
+                ],
+              ),
+              SizedBox(height: vSpacing),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildMainMenuCard(
+                    item: menuItems[2],
+                    index: 2,
+                    isTV: isTV,
+                    isMobile: isMobile,
+                    width: cardWidth,
+                    height: cardHeight,
+                  ),
+                  SizedBox(width: spacing),
+                  _buildMainMenuCard(
+                    item: menuItems[3],
+                    index: 3,
+                    isTV: isTV,
+                    isMobile: isMobile,
+                    width: cardWidth,
+                    height: cardHeight,
+                  ),
+                ],
+              ),
+            ],
+          ),
         );
       },
     );
@@ -1126,12 +1029,13 @@ class _CategoryPageState extends State<CategoryPage>
     return AnimatedBuilder(
       animation: cardFocusNode,
       builder: (context, _) {
-        final isFocused = cardFocusNode.hasFocus;
+        final isFocused = TvDetector.isTVDevice && cardFocusNode.hasFocus;
         return AnimatedScale(
           scale: isFocused ? 1.05 : 1.0,
           duration: const Duration(milliseconds: 80),
           child: InkWell(
-            focusNode: cardFocusNode,
+            focusNode: TvDetector.isTVDevice ? cardFocusNode : null,
+            canRequestFocus: TvDetector.isTVDevice,
             borderRadius: BorderRadius.circular(24),
             onTap: item.onTap,
             child: Stack(
@@ -1273,7 +1177,7 @@ class _CategoryPageState extends State<CategoryPage>
                     focusNode: _refreshFocusNode,
                     onTap: () async {
                       selectedPlayList = null;
-                      await getPlaylist();
+                      await _checkPinAndLoad();
                     },
                   ),
                 ),
@@ -1331,6 +1235,69 @@ class _CategoryPageState extends State<CategoryPage>
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Device PIN Gate
+  // ---------------------------------------------------------------------------
+
+  /// Called on both app launch and refresh.
+  /// If a device PIN is set locally, shows the verification dialog first.
+  /// Only proceeds to [getPlaylist] if the PIN is verified (or none is set).
+  Future<void> _checkPinAndLoad() async {
+    final pinService = PinSecurityService();
+    final hasPin = await pinService.isPinCreated();
+    if (!mounted) return;
+
+    if (hasPin) {
+      final verified = await _showDevicePinVerifyDialog();
+      if (!mounted) return;
+      if (!verified) {
+        // User cancelled or failed — don't refresh
+        ToastService.showError('PIN required to access content');
+        return;
+      }
+    }
+    await getPlaylist();
+  }
+
+  /// Displays the PIN verification dialog in a loop until the user either
+  /// enters the correct PIN (returns `true`) or dismisses (returns `false`).
+  Future<bool> _showDevicePinVerifyDialog() async {
+    while (mounted) {
+      final enteredPin = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const PinInputDialog(
+          mode: PinDialogMode.verify,
+          titleOverride: 'Device PIN Required',
+        ),
+      );
+
+      if (enteredPin == null) return false; // User closed dialog
+
+      final completer = Completer<bool>();
+      if (!mounted) return false;
+      BlocProvider.of<WiseBloc>(context).add(
+        VerifyDevicePinEvent(
+          pin: enteredPin,
+          onSuccess: () => completer.complete(true),
+          onError: (msg) {
+            completer.complete(false);
+            if (mounted) {
+              ToastService.showError(
+                msg.isNotEmpty ? msg : 'Incorrect PIN. Please try again.',
+              );
+            }
+          },
+        ),
+      );
+
+      final isCorrect = await completer.future;
+      if (isCorrect) return true;
+      // If incorrect, the loop will show dialog again
+    }
+    return false;
+  }
+
   /// Shows a center-screen Dialog with options to Set, Change, or Remove the device PIN.
   void _showDevicePinSettings() async {
     final pinService = PinSecurityService();
@@ -1357,9 +1324,13 @@ class _CategoryPageState extends State<CategoryPage>
           ),
         );
         if (newPin != null && newPin.length == 4 && mounted) {
+          _showLoader(context);
           BlocProvider.of<WiseBloc>(context)
               .add(SetDevicePinEvent(pin: newPin));
-          ToastService.showSuccess("Device PIN setting requested");
+          // Wait a tick for bloc to process
+          await Future.delayed(const Duration(milliseconds: 300));
+          if (mounted) _stopLoader(context);
+          ToastService.showSuccess('Device PIN set successfully');
         }
         break;
 
@@ -1372,24 +1343,16 @@ class _CategoryPageState extends State<CategoryPage>
           ),
         );
         if (result != null && mounted) {
-          try {
-            _showLoader(context);
-            final apiRepo = ApiRepo(apiService: ApiService());
-            await apiRepo.verifyDevicePin(result['oldPin']!);
-            if (mounted) _stopLoader(context);
-            BlocProvider.of<WiseBloc>(context).add(
-              ChangePinEvent(
-                oldPin: result['oldPin']!,
-                newPin: result['newPin']!,
-              ),
-            );
-            ToastService.showSuccess("Device PIN change requested");
-          } catch (e) {
-            if (mounted) _stopLoader(context);
-            ToastService.showError(
-              e.toString().replaceAll("ServerException: ", ""),
-            );
-          }
+          _showLoader(context);
+          BlocProvider.of<WiseBloc>(context).add(
+            ChangePinEvent(
+              oldPin: result['oldPin']!,
+              newPin: result['newPin']!,
+            ),
+          );
+          await Future.delayed(const Duration(milliseconds: 300));
+          if (mounted) _stopLoader(context);
+          ToastService.showSuccess('Device PIN changed successfully');
         }
         break;
 
@@ -1409,11 +1372,11 @@ class _CategoryPageState extends State<CategoryPage>
             if (mounted) _stopLoader(context);
             BlocProvider.of<WiseBloc>(context)
                 .add(RemoveDevicePinEvent(currentPin: currentPin));
-            ToastService.showSuccess("Device PIN removal requested");
+            ToastService.showSuccess('Device PIN removed successfully');
           } catch (e) {
             if (mounted) _stopLoader(context);
             ToastService.showError(
-              e.toString().replaceAll("ServerException: ", ""),
+              e.toString().replaceAll('ServerException: ', ''),
             );
           }
         }
@@ -1446,12 +1409,13 @@ class _CategoryPageState extends State<CategoryPage>
     return AnimatedBuilder(
       animation: focusNode,
       builder: (context, _) {
-        final isFocused = focusNode.hasFocus;
+        final isFocused = TvDetector.isTVDevice && focusNode.hasFocus;
         return AnimatedScale(
           scale: isFocused ? 1.04 : 1.0,
           duration: const Duration(milliseconds: 80),
           child: InkWell(
-            focusNode: focusNode,
+            focusNode: TvDetector.isTVDevice ? focusNode : null,
+            canRequestFocus: TvDetector.isTVDevice,
             onTap: onTap,
             borderRadius: BorderRadius.circular(12),
             child: AnimatedContainer(
@@ -1651,12 +1615,13 @@ class FocusableAppBarAction extends StatelessWidget {
     return AnimatedBuilder(
       animation: focusNode,
       builder: (context, _) {
-        final isFocused = focusNode.hasFocus;
+        final isFocused = TvDetector.isTVDevice && focusNode.hasFocus;
         return AnimatedScale(
           scale: isFocused ? 1.05 : 1.0,
           duration: const Duration(milliseconds: 80),
           child: InkWell(
-            focusNode: focusNode,
+            focusNode: TvDetector.isTVDevice ? focusNode : null,
+            canRequestFocus: TvDetector.isTVDevice,
             onTap: onPressed,
             borderRadius: BorderRadius.circular(12),
             child: AnimatedContainer(
@@ -1931,7 +1896,7 @@ class _DevicePinSettingsDialogState extends State<_DevicePinSettingsDialog> {
     return AnimatedBuilder(
       animation: focusNode,
       builder: (context, _) {
-        final isFocused = focusNode.hasFocus;
+        final isFocused = TvDetector.isTVDevice && focusNode.hasFocus;
         final activeColor = isDestructive
             ? Colors.redAccent
             : AppColor.accentRed;
@@ -1939,7 +1904,8 @@ class _DevicePinSettingsDialogState extends State<_DevicePinSettingsDialog> {
           scale: isFocused ? 1.05 : 1.0,
           duration: const Duration(milliseconds: 100),
           child: InkWell(
-            focusNode: focusNode,
+            focusNode: TvDetector.isTVDevice ? focusNode : null,
+            canRequestFocus: TvDetector.isTVDevice,
             borderRadius: BorderRadius.circular(12),
             onTap: onTap,
             child: AnimatedContainer(
@@ -2040,12 +2006,13 @@ class _DialogCloseButton extends StatelessWidget {
     return AnimatedBuilder(
       animation: focusNode,
       builder: (context, _) {
-        final isFocused = focusNode.hasFocus;
+        final isFocused = TvDetector.isTVDevice && focusNode.hasFocus;
         return AnimatedScale(
           scale: isFocused ? 1.15 : 1.0,
           duration: const Duration(milliseconds: 120),
           child: InkWell(
-            focusNode: focusNode,
+            focusNode: TvDetector.isTVDevice ? focusNode : null,
+            canRequestFocus: TvDetector.isTVDevice,
             onTap: onPressed,
             borderRadius: BorderRadius.circular(20),
             child: AnimatedContainer(
@@ -2080,13 +2047,11 @@ class _DialogCloseButton extends StatelessWidget {
 
 /// Professional TV-Optimized Modal Dialog for Managing Playlists & Security PINs.
 class _PlaylistManagementDialog extends StatefulWidget {
-  final List<GetplayListModel> playList;
   final GetplayListModel? selectedPlayList;
   final VoidCallback onOpenPinSettings;
 
   const _PlaylistManagementDialog({
     Key? key,
-    required this.playList,
     required this.selectedPlayList,
     required this.onOpenPinSettings,
   }) : super(key: key);
@@ -2105,30 +2070,54 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
   final Map<int, FocusNode> _pinNodes = {};
   final Map<int, FocusNode> _lockNodes = {};
 
-  // Local sorted copy: selected first, then pinned, then rest
-  late List<GetplayListModel> _sortedList;
+  final ScrollController _scrollController = ScrollController();
+
+  // Live-sorted list rebuilt whenever the bloc emits a new playLists state.
+  List<GetplayListModel> _sortedList = [];
+
+  // Track the last seen list identity so we only rebuild when needed.
+  List<GetplayListModel>? _lastSeenList;
+
+  // Track whether we still need to request initial focus.
+  bool _needsInitialFocus = true;
 
   @override
   void initState() {
     super.initState();
-    _sortedList = _buildSortedList();
-    _wireNodes();
-    // Request initial focus ONE TIME only — not inside _wireNodes so that
-    // subsequent re-wiring (e.g. after a pin toggle) doesn't steal focus.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        if (_sortedList.isNotEmpty) {
-          _getSelectNode(0).requestFocus();
-        } else {
-          _closeFocusNode.requestFocus();
-        }
-      }
-    });
+    // Wire the header nodes immediately — list nodes will be wired on first
+    // BlocBuilder rebuild when _onLiveListChanged is called.
+    _wireHeaderNodes();
   }
 
-  List<GetplayListModel> _buildSortedList() {
+  /// Wires only the two header focus nodes (close + pin settings).
+  /// Called once from initState. List nodes are wired inside _wireNodes
+  /// which is called from _onLiveListChanged on each bloc emission.
+  void _wireHeaderNodes() {
+    wireDpadNode(
+      _closeFocusNode,
+      lockUp: true,
+      lockLeft: true,
+      right: _pinSettingsFocusNode,
+      lockDown: true,
+      onSelect: () => Navigator.pop(context),
+    );
+    wireDpadNode(
+      _pinSettingsFocusNode,
+      lockUp: true,
+      lockRight: true,
+      left: _closeFocusNode,
+      lockDown: true,
+      onSelect: () => widget.onOpenPinSettings(),
+    );
+  }
+
+  /// Builds a sorted copy from [liveList] (live bloc state):
+  ///   1. Currently-selected playlist first
+  ///   2. Pinned playlists next
+  ///   3. Everything else in original order
+  List<GetplayListModel> _buildSortedList(List<GetplayListModel> liveList) {
     final selected = widget.selectedPlayList;
-    final list = List<GetplayListModel>.from(widget.playList);
+    final list = List<GetplayListModel>.from(liveList);
     list.sort((a, b) {
       final aIsSelected = selected != null && a.id == selected.id;
       final bIsSelected = selected != null && b.id == selected.id;
@@ -2141,6 +2130,24 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
       return 0;
     });
     return list;
+  }
+
+  /// Called from BlocBuilder whenever the live playlist state changes.
+  /// Rebuilds _sortedList and re-wires D-pad nodes if the list changed.
+  void _onLiveListChanged(List<GetplayListModel> liveList) {
+    // Reference-equality check — if it's the same list object, skip.
+    if (identical(_lastSeenList, liveList)) return;
+    _lastSeenList = liveList;
+    _sortedList = _buildSortedList(liveList);
+    _wireNodes();
+
+    // Request focus the very first time we have a non-empty list.
+    if (_needsInitialFocus && _sortedList.isNotEmpty) {
+      _needsInitialFocus = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _getSelectNode(0).requestFocus();
+      });
+    }
   }
 
   void _wireNodes() {
@@ -2208,10 +2215,37 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
     // away from wherever the user's cursor currently is.
   }
 
+  /// Shows a loading overlay. Returns a navigator key so we can close it
+  /// precisely without accidentally popping the wrong route.
+  bool _loaderVisible = false;
+
+  void _showLoader() {
+    if (_loaderVisible) return;
+    _loaderVisible = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const LoaderScreen(key: ValueKey('playlist_pin_loader')),
+    ).then((_) {
+      _loaderVisible = false;
+    });
+  }
+
+  void _stopLoader() {
+    if (!_loaderVisible) return;
+    _loaderVisible = false;
+    // Pop only the topmost dialog (the loader) — do NOT use rootNavigator so
+    // we stay scoped to the current Navigator and don't accidentally pop the
+    // management dialog itself.
+    Navigator.of(context).pop();
+  }
+
   /// Selects a playlist. If it is locked, prompts for PIN verification first.
+  /// On success: closes the PIN dialog → closes the management dialog.
   void _selectPlaylist(GetplayListModel item) async {
+    GetplayListModel selectedItem = item;
     if (item.isLocked == true) {
-      final pinService = PinSecurityService();
+      // Show PIN entry dialog (management dialog is still open beneath it).
       final enteredPin = await showDialog<String>(
         context: context,
         builder: (context) => const PinInputDialog(
@@ -2219,26 +2253,67 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
           titleOverride: "Enter Playlist PIN",
         ),
       );
+      // User cancelled PIN entry — do nothing, stay in the management dialog.
       if (enteredPin == null || !mounted) return;
-      final isValid = await pinService.verifyPlaylistPin(
-        playlistId: item.id!,
-        pin: enteredPin,
-      );
-      if (!mounted) return;
-      if (!isValid) {
-        ToastService.showError("Incorrect PIN");
+
+      _showLoader();
+      final apiRepo = ApiRepo(apiService: ApiService());
+      try {
+        final unlocked = await apiRepo.verifyPlaylistPin(
+          playlistId: item.id!,
+          pin: enteredPin,
+        );
+        if (mounted) {
+          _stopLoader();
+          BlocProvider.of<WiseBloc>(
+            context,
+          ).add(VerifyPlaylistPinEvent(playlistId: item.id!, pin: enteredPin));
+        }
+        selectedItem = unlocked;
+      } catch (e) {
+        if (mounted) {
+          _stopLoader();
+          ToastService.showError(
+            e
+                .toString()
+                .replaceAll("Exception: ", "")
+                .replaceAll("ServerException: ", ""),
+          );
+        }
+        // Stay in management dialog so user can retry or choose another.
         return;
       }
     }
-    if (mounted) Navigator.pop(context, item);
+    // Close the management dialog (and return the selected playlist to the
+    // caller). This dismisses the last visible overlay — no stale popups left.
+    if (mounted) Navigator.pop(context, selectedItem);
+  }
+
+  /// Scrolls the list so the newly focused node is visible.
+  void _ensureVisibleOnFocus(FocusNode node) {
+    if (!node.hasFocus) return;
+    final ctx = node.context;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
+    );
+  }
+
+  FocusNode _createListNode(String label) {
+    final node = FocusNode(debugLabel: label);
+    node.addListener(() => _ensureVisibleOnFocus(node));
+    return node;
   }
 
   FocusNode _getSelectNode(int i) =>
-      _selectNodes.putIfAbsent(i, () => FocusNode(debugLabel: 'select_$i'));
+      _selectNodes.putIfAbsent(i, () => _createListNode('select_$i'));
   FocusNode _getPinNode(int i) =>
-      _pinNodes.putIfAbsent(i, () => FocusNode(debugLabel: 'pin_$i'));
+      _pinNodes.putIfAbsent(i, () => _createListNode('pin_$i'));
   FocusNode _getLockNode(int i) =>
-      _lockNodes.putIfAbsent(i, () => FocusNode(debugLabel: 'lock_$i'));
+      _lockNodes.putIfAbsent(i, () => _createListNode('lock_$i'));
 
   @override
   void dispose() {
@@ -2253,6 +2328,7 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
     for (final n in _lockNodes.values) {
       n.dispose();
     }
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -2267,17 +2343,27 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
         ),
       );
       if (enteredPin != null && mounted) {
-        final isValid = await pinService.verifyPlaylistPin(
-          playlistId: e.id!,
-          pin: enteredPin,
-        );
-        if (isValid) {
-          BlocProvider.of<WiseBloc>(context)
-              .add(TogglePlaylistLockEvent(playlistId: e.id!, isLocked: false));
-          await pinService.removePlaylistPin(e.id!);
-          setState(() {});
-        } else {
-          ToastService.showError("Incorrect PIN");
+        _showLoader();
+        final apiRepo = ApiRepo(apiService: ApiService());
+        try {
+          await apiRepo.verifyPlaylistPin(playlistId: e.id!, pin: enteredPin);
+          if (mounted) {
+            _stopLoader();
+            BlocProvider.of<WiseBloc>(
+              context,
+            ).add(TogglePlaylistLockEvent(playlistId: e.id!, isLocked: false));
+            await pinService.removePlaylistPin(e.id!);
+          }
+        } catch (err) {
+          if (mounted) {
+            _stopLoader();
+            ToastService.showError(
+              err
+                  .toString()
+                  .replaceAll("Exception: ", "")
+                  .replaceAll("ServerException: ", ""),
+            );
+          }
         }
       }
     } else {
@@ -2289,32 +2375,298 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
         ),
       );
       if (newPin != null && newPin.length == 4 && mounted) {
-        await pinService.setPlaylistPin(playlistId: e.id!, pin: newPin);
-        BlocProvider.of<WiseBloc>(context)
-            .add(TogglePlaylistLockEvent(playlistId: e.id!, isLocked: true));
-        setState(() {});
+        // The bloc now handles both steps:
+        //   1. POST /{playlistId}/playlist-pin  { "pin": newPin }
+        //   2. PUT  /{playlistId}/lock?locked=true
+        BlocProvider.of<WiseBloc>(context).add(
+          TogglePlaylistLockEvent(
+            playlistId: e.id!,
+            isLocked: true,
+            pin: newPin,
+          ),
+        );
       }
     }
   }
 
+  /// Toggles the pinned-to-top state of [item] for ANY playlist (locked or
+  /// unlocked). The optimistic local update + BLoC event together ensure:
+  ///   • Instant visual feedback (icon flips, row reorders immediately).
+  ///   • The global state (BLoC) is updated so the order persists when the
+  ///     dialog is re-opened or other screens rebuild.
   void _togglePin(GetplayListModel item) {
-    if (item.isPinned == true) {
-      BlocProvider.of<WiseBloc>(context)
-          .add(UnpinPlaylistEvent(playlistId: item.id!));
-    } else {
+    final nowPinned = item.isPinned != true;
+    if (nowPinned) {
       BlocProvider.of<WiseBloc>(context)
           .add(PinPlaylistEvent(playlistId: item.id!));
+    } else {
+      BlocProvider.of<WiseBloc>(context)
+          .add(UnpinPlaylistEvent(playlistId: item.id!));
     }
-    // Optimistic update of the local list for immediate UI transition
+    // Optimistic local update — reorder immediately without waiting for the
+    // bloc round-trip.  The BlocBuilder will sync again once the bloc emits.
     setState(() {
-      if (item.isPinned == true) {
-        item.isPinned = false;
-      } else {
-        item.isPinned = true;
-      }
-      _sortedList = _buildSortedList();
+      item.isPinned = nowPinned;
+      _sortedList = _buildSortedList(_lastSeenList ?? _sortedList);
       _wireNodes();
     });
+  }
+
+  Widget _buildPlaylistRow(BuildContext context, int index) {
+    final item = _sortedList[index];
+    final isSelected = widget.selectedPlayList?.id == item.id;
+    final selectNode = _getSelectNode(index);
+    final pinNode = _getPinNode(index);
+    final lockNode = _getLockNode(index);
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? AppColor.accentRed.withValues(alpha: 0.12)
+            : Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isSelected
+              ? AppColor.accentRed.withValues(alpha: 0.5)
+              : Colors.white.withValues(alpha: 0.06),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: AnimatedBuilder(
+              animation: selectNode,
+              builder: (context, _) {
+                final isFocused = TvDetector.isTVDevice && selectNode.hasFocus;
+                return AnimatedScale(
+                  scale: isFocused ? 1.02 : 1.0,
+                  duration: const Duration(milliseconds: 80),
+                  child: InkWell(
+                    focusNode: TvDetector.isTVDevice ? selectNode : null,
+                    canRequestFocus: TvDetector.isTVDevice,
+                    onTap: () => _selectPlaylist(item),
+                    borderRadius: BorderRadius.circular(10),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 80),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isFocused
+                            ? AppColor.accentRed.withValues(alpha: 0.25)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isFocused
+                              ? AppColor.accentRed
+                              : Colors.transparent,
+                          width: isFocused ? 2.0 : 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isSelected
+                                ? Icons.check_circle_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                            color: isSelected
+                                ? AppColor.accentRed
+                                : Colors.white38,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        item.name ?? "Playlist #${index + 1}",
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: isSelected
+                                              ? FontWeight.bold
+                                              : FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    if (item.isLocked == true) ...[
+                                      const SizedBox(width: 6),
+                                      const Icon(
+                                        Icons.lock_rounded,
+                                        color: AppColor.accentRed,
+                                        size: 13,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  "ID: ${item.id ?? 'N/A'}",
+                                  style: const TextStyle(
+                                    color: Colors.white38,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Pin / Unpin Button
+          AnimatedBuilder(
+            animation: pinNode,
+            builder: (context, _) {
+              final isFocused = TvDetector.isTVDevice && pinNode.hasFocus;
+              final isPinned = item.isPinned == true;
+              return AnimatedScale(
+                scale: isFocused ? 1.1 : 1.0,
+                duration: const Duration(milliseconds: 80),
+                child: InkWell(
+                  focusNode: TvDetector.isTVDevice ? pinNode : null,
+                  canRequestFocus: TvDetector.isTVDevice,
+                  onTap: () => _togglePin(item),
+                  borderRadius: BorderRadius.circular(8),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 80),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isFocused
+                          ? AppColor.accentRed.withValues(alpha: 0.2)
+                          : (isPinned
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : Colors.white.withValues(alpha: 0.05)),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isFocused
+                            ? AppColor.accentRed
+                            : Colors.transparent,
+                      ),
+                    ),
+                    child: Icon(
+                      isPinned
+                          ? Icons.push_pin_rounded
+                          : Icons.push_pin_outlined,
+                      size: 18,
+                      color: isPinned ? Colors.white : Colors.white60,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 6),
+          // Lock / Unlock Button
+          AnimatedBuilder(
+            animation: lockNode,
+            builder: (context, _) {
+              final isFocused = TvDetector.isTVDevice && lockNode.hasFocus;
+              return AnimatedScale(
+                scale: isFocused ? 1.1 : 1.0,
+                duration: const Duration(milliseconds: 80),
+                child: InkWell(
+                  focusNode: TvDetector.isTVDevice ? lockNode : null,
+                  canRequestFocus: TvDetector.isTVDevice,
+                  onTap: () => _toggleLock(item),
+                  borderRadius: BorderRadius.circular(8),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 80),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isFocused
+                          ? AppColor.accentRed.withValues(alpha: 0.2)
+                          : Colors.white.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isFocused
+                            ? AppColor.accentRed
+                            : Colors.transparent,
+                      ),
+                    ),
+                    child: Icon(
+                      item.isLocked == true
+                          ? Icons.lock_rounded
+                          : Icons.lock_open_rounded,
+                      size: 18,
+                      color: item.isLocked == true
+                          ? AppColor.accentRed
+                          : Colors.white60,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Header button that opens the Device PIN settings dialog.
+  Widget _buildPinSettingsHeaderButton() {
+    return AnimatedBuilder(
+      animation: _pinSettingsFocusNode,
+      builder: (context, _) {
+        final isFocused =
+            TvDetector.isTVDevice && _pinSettingsFocusNode.hasFocus;
+        return AnimatedScale(
+          scale: isFocused ? 1.05 : 1.0,
+          duration: const Duration(milliseconds: 80),
+          child: InkWell(
+            focusNode: TvDetector.isTVDevice ? _pinSettingsFocusNode : null,
+            canRequestFocus: TvDetector.isTVDevice,
+            onTap: widget.onOpenPinSettings,
+            borderRadius: BorderRadius.circular(10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 80),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isFocused
+                    ? AppColor.accentRed.withValues(alpha: 0.25)
+                    : Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isFocused ? AppColor.accentRed : Colors.white10,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.lock_outline_rounded,
+                    size: 14,
+                    color: isFocused ? Colors.white : Colors.white70,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    "Device PIN",
+                    style: TextStyle(
+                      color: isFocused ? Colors.white : Colors.white70,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -2322,7 +2674,7 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
     final screenSize = MediaQuery.of(context).size;
     final screenW = screenSize.width;
     final screenH = screenSize.height;
-    // Responsive width: 90% of screen on small TVs, max 560 on large TVs
+    // Responsive width: 88% of screen on small TVs, max 560 on large TVs
     final dialogWidth = (screenW * 0.88).clamp(320.0, 560.0);
     // Wrap in PopScope so TV Back key pops only this dialog, not the whole route
     return PopScope(
@@ -2378,6 +2730,7 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ── Header ──
                 Row(
                   children: [
                     Container(
@@ -2398,16 +2751,20 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            "Manage Playlists & Security",
+                            "Manage Playlists",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 17,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              letterSpacing: 0.3,
                             ),
                           ),
+                          SizedBox(height: 2),
                           Text(
                             "Select a playlist or toggle lock",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: Colors.white54,
                               fontSize: 11,
@@ -2416,61 +2773,8 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
                         ],
                       ),
                     ),
-                    AnimatedBuilder(
-                      animation: _pinSettingsFocusNode,
-                      builder: (context, _) {
-                        final isFocused = _pinSettingsFocusNode.hasFocus;
-                        return AnimatedScale(
-                          scale: isFocused ? 1.05 : 1.0,
-                          duration: const Duration(milliseconds: 80),
-                          child: InkWell(
-                            focusNode: _pinSettingsFocusNode,
-                            onTap: widget.onOpenPinSettings,
-                            borderRadius: BorderRadius.circular(10),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 80),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isFocused
-                                    ? AppColor.accentRed.withValues(alpha: 0.25)
-                                    : Colors.white.withValues(alpha: 0.06),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: isFocused
-                                      ? AppColor.accentRed
-                                      : Colors.white10,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.shield_rounded,
-                                    size: 14,
-                                    color: isFocused
-                                        ? AppColor.accentRed
-                                        : Colors.white70,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    "PIN Security",
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: isFocused
-                                          ? Colors.white
-                                          : Colors.white70,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                    const SizedBox(width: 10),
+                    _buildPinSettingsHeaderButton(),
                     const SizedBox(width: 10),
                     _DialogCloseButton(
                       focusNode: _closeFocusNode,
@@ -2481,9 +2785,18 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
                 const SizedBox(height: 14),
                 const Divider(color: Colors.white12, height: 1),
                 const SizedBox(height: 12),
+                // ── Live playlist list — reacts to every bloc emission ──
                 Flexible(
-                  child: widget.playList.isEmpty
-                      ? const Center(
+                  child: BlocBuilder<WiseBloc, WiseState>(
+                    buildWhen: (prev, curr) => prev.playLists != curr.playLists,
+                    builder: (context, state) {
+                      // Rebuild sorted list whenever the bloc emits new data.
+                      // This ensures pin/lock changes from the BLoC are
+                      // reflected in real-time without reopening the dialog.
+                      _onLiveListChanged(state.playLists);
+
+                      if (_sortedList.isEmpty) {
+                        return const Center(
                           child: Padding(
                             padding: EdgeInsets.all(24.0),
                             child: Text(
@@ -2491,273 +2804,27 @@ class _PlaylistManagementDialogState extends State<_PlaylistManagementDialog> {
                               style: TextStyle(color: Colors.white54),
                             ),
                           ),
-                        )
-                      : ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: _sortedList.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 10),
-                          itemBuilder: (context, index) {
-                            final item = _sortedList[index];
-                            final isSelected =
-                                widget.selectedPlayList?.id == item.id;
-                            final selectNode = _getSelectNode(index);
-                            final pinNode = _getPinNode(index);
-                            final lockNode = _getLockNode(index);
+                        );
+                      }
 
-                            return Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? AppColor.accentRed.withValues(alpha: 0.12)
-                                    : Colors.white.withValues(alpha: 0.03),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? AppColor.accentRed.withValues(
-                                          alpha: 0.5,
-                                        )
-                                      : Colors.white.withValues(alpha: 0.06),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: AnimatedBuilder(
-                                      animation: selectNode,
-                                      builder: (context, _) {
-                                        final isFocused = selectNode.hasFocus;
-                                        return AnimatedScale(
-                                          scale: isFocused ? 1.02 : 1.0,
-                                          duration: const Duration(
-                                            milliseconds: 80,
-                                          ),
-                                          child: InkWell(
-                                            focusNode: selectNode,
-                                            onTap: () => _selectPlaylist(item),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                            child: AnimatedContainer(
-                                              duration: const Duration(
-                                                milliseconds: 80,
-                                              ),
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 8,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: isFocused
-                                                    ? AppColor.accentRed
-                                                          .withValues(
-                                                            alpha: 0.25,
-                                                          )
-                                                    : Colors.transparent,
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                border: Border.all(
-                                                  color: isFocused
-                                                      ? AppColor.accentRed
-                                                      : Colors.transparent,
-                                                  width: isFocused ? 2.0 : 1.0,
-                                                ),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  Icon(
-                                                    isSelected
-                                                        ? Icons
-                                                              .check_circle_rounded
-                                                        : Icons
-                                                              .radio_button_unchecked_rounded,
-                                                    color: isSelected
-                                                        ? AppColor.accentRed
-                                                        : Colors.white38,
-                                                    size: 20,
-                                                  ),
-                                                  const SizedBox(width: 10),
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Row(
-                                                          children: [
-                                                            Flexible(
-                                                              child: Text(
-                                                                item.name ??
-                                                                    "Playlist #${index + 1}",
-                                                                maxLines: 1,
-                                                                overflow:
-                                                                    TextOverflow
-                                                                        .ellipsis,
-                                                                style: TextStyle(
-                                                                  color: Colors
-                                                                      .white,
-                                                                  fontSize: 14,
-                                                                  fontWeight:
-                                                                      isSelected
-                                                                      ? FontWeight
-                                                                            .bold
-                                                                      : FontWeight
-                                                                            .w600,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                            if (item.isLocked ==
-                                                                true) ...[
-                                                              const SizedBox(
-                                                                width: 6,
-                                                              ),
-                                                              const Icon(
-                                                                Icons
-                                                                    .lock_rounded,
-                                                                color: AppColor
-                                                                    .accentRed,
-                                                                size: 13,
-                                                              ),
-                                                            ],
-                                                          ],
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 2,
-                                                        ),
-                                                        Text(
-                                                          "ID: ${item.id ?? 'N/A'}",
-                                                          style:
-                                                              const TextStyle(
-                                                                color: Colors
-                                                                    .white38,
-                                                                fontSize: 10,
-                                                              ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  // Pin / Unpin Button
-                                  AnimatedBuilder(
-                                    animation: pinNode,
-                                    builder: (context, _) {
-                                      final isFocused = pinNode.hasFocus;
-                                      final isPinned = item.isPinned == true;
-                                      return AnimatedScale(
-                                        scale: isFocused ? 1.1 : 1.0,
-                                        duration: const Duration(
-                                          milliseconds: 80,
-                                        ),
-                                        child: InkWell(
-                                          focusNode: pinNode,
-                                          onTap: () => _togglePin(item),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          child: AnimatedContainer(
-                                            duration: const Duration(
-                                              milliseconds: 80,
-                                            ),
-                                            padding: const EdgeInsets.all(8),
-                                            decoration: BoxDecoration(
-                                              color: isFocused
-                                                  ? AppColor.accentRed
-                                                        .withValues(alpha: 0.2)
-                                                  : (isPinned
-                                                        ? Colors.white
-                                                              .withValues(
-                                                                alpha: 0.1,
-                                                              )
-                                                        : Colors.white
-                                                              .withValues(
-                                                                alpha: 0.05,
-                                                              )),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color: isFocused
-                                                    ? AppColor.accentRed
-                                                    : Colors.transparent,
-                                              ),
-                                            ),
-                                            child: Icon(
-                                              isPinned
-                                                  ? Icons.push_pin_rounded
-                                                  : Icons.push_pin_outlined,
-                                              size: 18,
-                                              color: isPinned
-                                                  ? Colors.white
-                                                  : Colors.white60,
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  const SizedBox(width: 6),
-                                  // Lock / Unlock Button
-                                  AnimatedBuilder(
-                                    animation: lockNode,
-                                    builder: (context, _) {
-                                      final isFocused = lockNode.hasFocus;
-                                      return AnimatedScale(
-                                        scale: isFocused ? 1.1 : 1.0,
-                                        duration: const Duration(
-                                          milliseconds: 80,
-                                        ),
-                                        child: InkWell(
-                                          focusNode: lockNode,
-                                          onTap: () => _toggleLock(item),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          child: AnimatedContainer(
-                                            duration: const Duration(
-                                              milliseconds: 80,
-                                            ),
-                                            padding: const EdgeInsets.all(8),
-                                            decoration: BoxDecoration(
-                                              color: isFocused
-                                                  ? AppColor.accentRed
-                                                        .withValues(alpha: 0.2)
-                                                  : Colors.white.withValues(
-                                                      alpha: 0.05,
-                                                    ),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color: isFocused
-                                                    ? AppColor.accentRed
-                                                    : Colors.transparent,
-                                              ),
-                                            ),
-                                            child: Icon(
-                                              item.isLocked == true
-                                                  ? Icons.lock_rounded
-                                                  : Icons.lock_open_rounded,
-                                              size: 18,
-                                              color: item.isLocked == true
-                                                  ? AppColor.accentRed
-                                                  : Colors.white60,
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+                      // SingleChildScrollView + Column builds ALL rows, so every
+                      // FocusNode is attached and Scrollable.ensureVisible works
+                      // when the remote moves focus to an off-screen row.
+                      return SingleChildScrollView(
+                        controller: _scrollController,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (int i = 0; i < _sortedList.length; i++) ...[
+                              if (i > 0) const SizedBox(height: 10),
+                              _buildPlaylistRow(context, i),
+                            ],
+                          ],
                         ),
+                      );
+                    },
+                  ),
                 ),
               ],
             ),

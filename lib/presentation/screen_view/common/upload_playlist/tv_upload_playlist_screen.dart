@@ -93,7 +93,7 @@ class _TVUploadPlaylistScreenState extends State<TVUploadPlaylistScreen> {
       final res = await apiService.hitPostApi(
         reqData: {
           "name": nameCtrl.text.toString(),
-          "m3uUrl": "http://line.vpnworld.pro/get.php?username=77D317&password=41CC5066&type=m3u_plus&output=mpegts",
+          "m3uUrl": "http://line.vpnworld.pro/get.php?username=15F2C2&password=512608&type=m3u_plus&output=mpegts",
         },
         endpoint: "/api/playlist/m3u",
       );

@@ -2,7 +2,7 @@ name: wiseplayertizen
 description: "A Tizen-compatible Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+3
+version: 2.0.8+5
 
 environment:
   sdk: '>=3.13.1 <4.0.0'

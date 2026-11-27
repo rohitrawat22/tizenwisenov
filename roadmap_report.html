@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WisePlayer Tizen TV - Comprehensive Pending Work, Feature Gaps & Production Roadmap</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 15mm 12mm 15mm 12mm;
+  }
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    color: #1a202c;
+    background: #ffffff;
+    line-height: 1.5;
+    font-size: 9.5pt;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .header {
+    background: #0f172a;
+    color: #ffffff;
+    padding: 22px 26px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    border-bottom: 4px solid #800000;
+  }
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #334155;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+  }
+  .logo {
+    font-size: 20pt;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+  }
+  .logo span {
+    color: #e50914;
+  }
+  .badge-tag {
+    background: #800000;
+    color: #ffffff;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 8pt;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+  .header h1 {
+    font-size: 15pt;
+    font-weight: 800;
+    margin: 0 0 6px 0;
+    color: #ffffff;
+  }
+  .meta-row {
+    font-size: 8.5pt;
+    color: #94a3b8;
+  }
+  .meta-row strong {
+    color: #f1f5f9;
+  }
+
+  .stat-table {
+    width: 100%;
+    margin-bottom: 20px;
+    border-collapse: collapse;
+  }
+  .stat-card {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-top: 3px solid #3b82f6;
+    padding: 12px;
+    text-align: center;
+    border-radius: 4px;
+  }
+  .stat-card.red { border-top-color: #ef4444; }
+  .stat-card.orange { border-top-color: #f97316; }
+  .stat-card.purple { border-top-color: #8b5cf6; }
+  .stat-card.green { border-top-color: #10b981; }
+  .stat-num {
+    font-size: 18pt;
+    font-weight: 900;
+    color: #0f172a;
+    line-height: 1.1;
+  }
+  .stat-lbl {
+    font-size: 7.5pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+
+  h2 {
+    font-size: 12pt;
+    font-weight: 800;
+    color: #0f172a;
+    border-left: 4px solid #800000;
+    padding-left: 8px;
+    margin: 22px 0 10px 0;
+    text-transform: uppercase;
+  }
+
+  p {
+    margin: 0 0 8px 0;
+  }
+
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+    font-size: 8.5pt;
+  }
+  table.data-table th {
+    background: #0f172a;
+    color: #ffffff;
+    font-weight: bold;
+    text-align: left;
+    padding: 7px 10px;
+    font-size: 8pt;
+    text-transform: uppercase;
+  }
+  table.data-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+  table.data-table tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 7pt;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+  .badge-p0 { background: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
+  .badge-p1 { background: #ffedd5; color: #9a3412; border: 1px solid #fb923c; }
+  .badge-p2 { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+
+  .item-card {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    page-break-inside: avoid;
+  }
+  .item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .item-title {
+    font-weight: 800;
+    font-size: 10pt;
+    color: #0f172a;
+  }
+  .item-desc {
+    font-size: 8.5pt;
+    color: #334155;
+    margin-bottom: 8px;
+  }
+
+  .grid-two {
+    display: flex;
+    gap: 12px;
+    background: #f1f5f9;
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-size: 8pt;
+  }
+  .col-half {
+    flex: 1;
+  }
+  .col-half strong {
+    display: block;
+    color: #0f172a;
+    margin-bottom: 4px;
+    font-size: 8pt;
+    text-transform: uppercase;
+  }
+  .col-half ul {
+    margin: 0;
+    padding-left: 16px;
+    color: #475569;
+  }
+  .col-half li {
+    margin-bottom: 3px;
+  }
+
+  code {
+    font-family: Consolas, monospace;
+    background: #e2e8f0;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 8pt;
+    color: #b91c1c;
+  }
+
+  .page-break {
+    page-break-after: always;
+  }
+
+  .footer-box {
+    margin-top: 25px;
+    padding: 12px;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 4px;
+    font-size: 8pt;
+    color: #64748b;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-top">
+    <div class="logo">Wise<span>Player</span> <small style="font-size: 11pt; color: #94a3b8; font-weight: normal;">for Samsung Tizen OS</small></div>
+    <div class="badge-tag">Production Roadmap</div>
+  </div>
+  <h1>Comprehensive Pending Work & Must-Have TV Features Report</h1>
+  <div class="meta-row">
+    <strong>Platform:</strong> Samsung Smart TV (Tizen 6.5 - 8.0) &nbsp;|&nbsp; 
+    <strong>Engine:</strong> flutter-tizen 3.13+ &nbsp;|&nbsp; 
+    <strong>Audit Scope:</strong> Codebase-Wide Analysis & Feature Readiness
+  </div>
+</div>
+
+<!-- TOP STATS -->
+<table class="stat-table">
+  <tr>
+    <td width="25%">
+      <div class="stat-card red">
+        <div class="stat-num">6</div>
+        <div class="stat-lbl">P0 - Critical Blockers</div>
+      </div>
+    </td>
+    <td width="25%">
+      <div class="stat-card orange">
+        <div class="stat-num">8</div>
+        <div class="stat-lbl">P1 - Core TV Features</div>
+      </div>
+    </td>
+    <td width="25%">
+      <div class="stat-card purple">
+        <div class="stat-num">6</div>
+        <div class="stat-lbl">P2 - Enhancements</div>
+      </div>
+    </td>
+    <td width="25%">
+      <div class="stat-card green">
+        <div class="stat-num">45%</div>
+        <div class="stat-lbl">Current TV Readiness</div>
+      </div>
+    </td>
+  </tr>
+</table>
+
+<!-- SECTION 1 -->
+<h2>1. Executive Summary: Current State vs Commercial TV Standard</h2>
+<p>Benchmarked against standard commercial IPTV applications on Samsung Smart TVs (TiviMate, IBO Player, Smart IPTV, IPTV Smarters Pro):</p>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Module</th>
+      <th>Readiness</th>
+      <th>Current Codebase Gap</th>
+      <th>Production Requirement</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Video Player & DRM</strong></td>
+      <td><span class="badge badge-p1">50%</span></td>
+      <td>Zero DRM (PlayReady / Widevine); No audio track picker; No subtitle selection; Aspect ratio locked</td>
+      <td>Hardware-accelerated AVPlay / Tizen Player with multi-audio, subtitle overlay, and aspect ratio modes</td>
+    </tr>
+    <tr>
+      <td><strong>TV Remote & D-Pad UX</strong></td>
+      <td><span class="badge badge-p1">45%</span></td>
+      <td>No 0-9 numeric channel zapping; No Channel +/- keys; No Color keys (Red/Green/Yellow/Blue); Unhandled Back button exit</td>
+      <td>Full TV remote integration with numeric channel switcher, instant zapping, and focus restoration</td>
+    </tr>
+    <tr>
+      <td><strong>EPG (TV Guide) & Timeshift</strong></td>
+      <td><span class="badge badge-p0">15%</span></td>
+      <td>Model exists in code, but NO API calls fetch EPG data; Drawer opens completely empty</td>
+      <td>Full 24-hour timeline EPG guide, "Now & Next" mini-banner, catch-up / archive playback</td>
+    </tr>
+    <tr>
+      <td><strong>Content Discovery & Search</strong></td>
+      <td><span class="badge badge-p0">20%</span></td>
+      <td><code>SearchScreen</code> and <code>UserProfile</code> are 15-line empty placeholder stubs</td>
+      <td>Global multi-category live search (Live, Movies, Series) with on-screen TV keyboard</td>
+    </tr>
+    <tr>
+      <td><strong>Home Dashboard</strong></td>
+      <td><span class="badge badge-p2">35%</span></td>
+      <td>Hardcoded dummy onboarding banners; static dummy movie cards</td>
+      <td>Dynamic Xtream-linked "Continue Watching", "Recently Added", "Trending Now"</td>
+    </tr>
+    <tr>
+      <td><strong>Security & Credentials</strong></td>
+      <td><span class="badge badge-p0">40%</span></td>
+      <td>Hardcoded test credentials & M3U URLs in upload screens; adult categories unlocked</td>
+      <td>User input binding, encrypted local secure storage, automated 18+ category PIN protection</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- PAGE BREAK -->
+<div class="page-break"></div>
+
+<!-- SECTION 2 -->
+<h2>2. Priority P0: Critical Missing Features & Blockers</h2>
+<p>These items represent incomplete or broken capabilities that block production launch:</p>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">1. PlayReady & Widevine DRM Stream Integration</span>
+    <span class="badge badge-p0">P0 - Fatal Blocker</span>
+  </div>
+  <div class="item-desc">
+    Currently, WisePlayer has zero DRM handling in either Dart or native C++ code. Premium IPTV streams and legal live channels encrypted via Microsoft PlayReady or Google Widevine fail to initialize and return blank/stalled video.
+  </div>
+  <div class="grid-two">
+    <div class="col-half">
+      <strong>Current Flaw:</strong>
+      <ul>
+        <li><code>tv.video.dart</code> and <code>stream_player.dart</code> only initialize raw URI streams.</li>
+        <li><code>pubspec.yaml</code> comments out <code>video_player_avplay</code>.</li>
+        <li>No license acquisition headers, token parsing, or challenge exchange.</li>
+      </ul>
+    </div>
+    <div class="col-half">
+      <strong>Required Solution:</strong>
+      <ul>
+        <li>Integrate Samsung Tizen AVPlay native DRM API (<code>webapis.avplay.setDrm("PLAYREADY", ...)</code>).</li>
+        <li>Parse DRM license URL, custom HTTP headers, and SOAP/JSON challenge payloads.</li>
+        <li>Provide fallback to clear streams when DRM certificate handshake fails.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">2. Complete Missing EPG (Electronic Program Guide) Pipeline</span>
+    <span class="badge badge-p0">P0 - Core Feature</span>
+  </div>
+  <div class="item-desc">
+    In <code>stream_player.dart</code>, an <code>EpgProgramModel</code> exists, but the codebase contains <strong>zero API calls</strong> to actually fetch, parse, or populate EPG data. The comment states: <em>"Pass a List&lt;EpgProgramModel&gt; in from whatever screen already fetches the EPG JSON — this widget never fetches it itself."</em>
+  </div>
+  <div class="grid-two">
+    <div class="col-half">
+      <strong>Current Flaw:</strong>
+      <ul>
+        <li>Drawer opens with empty state or null list on every live TV channel.</li>
+        <li>Users have no idea what is currently playing, upcoming, or past.</li>
+        <li>Catch-up functionality is disabled because timeline data is absent.</li>
+      </ul>
+    </div>
+    <div class="col-half">
+      <strong>Required Solution:</strong>
+      <ul>
+        <li>Implement <code>get_simple_data_table</code> & XMLTV EPG endpoints in <code>ApiRepo</code>.</li>
+        <li>Build 24-hour horizontal/vertical EPG timeline grid view.</li>
+        <li>Implement "Now & Next" program info bar in the player overlay (OSD).</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">3. Build Global Search Screen (Currently 15-Line Stub)</span>
+    <span class="badge badge-p0">P0 - Unbuilt Screen</span>
+  </div>
+  <div class="item-desc">
+    The "Search" navigation tab opens <code>lib/presentation/screen_view/common/tabs/search/screens/search_screen.dart</code>, which is currently a 15-line empty placeholder containing only <code>Scaffold(appBar: AppBar(title: Text("SearchScreen")))</code>.
+  </div>
+  <div class="grid-two">
+    <div class="col-half">
+      <strong>Current Flaw:</strong>
+      <ul>
+        <li>Search tab is dead; users cannot look up any channel, movie, or series.</li>
+        <li>No on-screen keyboard optimized for TV remote D-Pad navigation.</li>
+      </ul>
+    </div>
+    <div class="col-half">
+      <strong>Required Solution:</strong>
+      <ul>
+        <li>Implement tri-tab search: Live TV, VOD Movies, and TV Series.</li>
+        <li>Add fast in-memory indexing or debounce API search with visual grid results.</li>
+        <li>Support Tizen OS virtual keyboard with direct D-Pad cursor navigation.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">4. Replace `BetterPlayer` in TV Favorites Playback</span>
+    <span class="badge badge-p0">P0 - Runtime Crash</span>
+  </div>
+  <div class="item-desc">
+    <code>lib/presentation/screen_view/common/fav/fav.video.dart</code> imports and instantiates <code>better_player_plus</code>. As documented in <code>pubspec.yaml:48</code>, BetterPlayer is Android/iOS-only. Tapping any item in the Favorites screen triggers a fatal crash on Samsung Tizen TV.
+  </div>
+  <div class="grid-two">
+    <div class="col-half">
+      <strong>Current Flaw:</strong>
+      <ul>
+        <li>MissingPluginException thrown on Tizen OS runtime.</li>
+        <li>Favorites player is fragmented from the main TV stream player.</li>
+      </ul>
+    </div>
+    <div class="col-half">
+      <strong>Required Solution:</strong>
+      <ul>
+        <li>Unify favorites playback into <code>VideoPlayerScreen</code> (using <code>video_player_tizen</code>).</li>
+        <li>Deprecate and remove <code>fav.video.dart</code> completely.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">5. Eliminate Hardcoded Credentials in Upload Playlist Screens</span>
+    <span class="badge badge-p0">P0 - Critical Security</span>
+  </div>
+  <div class="item-desc">
+    In both <code>upload_playlist.dart:323-325</code> and <code>tv_upload_playlist_screen.dart:94-97</code>, the upload function ignores user input and sends hardcoded external URLs and credentials (<code>http://line.vpnworld.pro/get.php?username=15F2C2&password=...</code>).
+  </div>
+  <div class="grid-two">
+    <div class="col-half">
+      <strong>Current Flaw:</strong>
+      <ul>
+        <li>Severe security vulnerability leaking third-party Xtream credentials.</li>
+        <li>Users cannot upload their own M3U playlist; hardcoded data is sent every time.</li>
+      </ul>
+    </div>
+    <div class="col-half">
+      <strong>Required Solution:</strong>
+      <ul>
+        <li>Bind <code>nameCtrl.text.trim()</code> and <code>urlCtrl.text.trim()</code> to API request payload.</li>
+        <li>Validate URL scheme (http/https) and M3U format prior to dispatch.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE BREAK -->
+<div class="page-break"></div>
+
+<!-- SECTION 3 -->
+<h2>3. Priority P1: Core Smart TV Features & Player Upgrades</h2>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">6. Audio Track & Subtitle Selection OSD Dialogs</span>
+    <span class="badge badge-p1">P1 - Player Feature</span>
+  </div>
+  <div class="item-desc">
+    Neither <code>VideoPlayerScreen</code> nor <code>TizenVideoScreen</code> exposes audio track switching or subtitle track selection. Users watching international live streams or multi-language VOD movies cannot switch from Hindi to English or enable captions.
+  </div>
+  <div class="grid-two">
+    <div class="col-half">
+      <strong>Required Architecture:</strong>
+      <ul>
+        <li>Query active audio & subtitle tracks from <code>VideoPlayerController</code>.</li>
+        <li>Create a quick-access bottom popup sheet or side drawer on TV remote Yellow button.</li>
+        <li>Support embedded CEA-608/708, WebVTT, and external SRT sidecars.</li>
+      </ul>
+    </div>
+    <div class="col-half">
+      <strong>User Experience:</strong>
+      <ul>
+        <li>Clean modal showing: Track Name, Language Code (e.g. ENG, HIN, SPA), Audio Format (Stereo, 5.1).</li>
+        <li>Subtitle offset/sync adjustment (-5s to +5s) for desynchronized streams.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">7. Numeric Remote Channel Zapping (0-9 Quick Jump)</span>
+    <span class="badge badge-p1">P1 - TV Remote</span>
+  </div>
+  <div class="item-desc">
+    Traditional TV viewers use physical remote numeric keys (0 to 9) to quickly jump to a known channel number (e.g. pressing <code>1</code>, <code>0</code>, <code>4</code> switches directly to channel 104). Currently, number keys are ignored.
+  </div>
+  <div class="grid-two">
+    <div class="col-half">
+      <strong>Implementation Steps:</strong>
+      <ul>
+        <li>Capture <code>LogicalKeyboardKey.digit0</code> through <code>digit9</code> in <code>onKeyEvent</code>.</li>
+        <li>Show a 2-second floating HUD badge in the top-right corner displaying typed digits.</li>
+        <li>After 1.5 seconds of inactivity, switch to the matched channel number.</li>
+      </ul>
+    </div>
+    <div class="col-half">
+      <strong>Channel +/- & Remote Keys:</strong>
+      <ul>
+        <li>Map <code>channelUp</code> / <code>channelDown</code> keys to next/previous channel in current category.</li>
+        <li>Map <code>mediaInfo</code> / <code>info</code> key to toggle OSD metadata without pausing playback.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">8. Aspect Ratio Toggle (Fit, Fill, Zoom, 16:9, 4:3)</span>
+    <span class="badge badge-p1">P1 - Player Feature</span>
+  </div>
+  <div class="item-desc">
+    Legacy IPTV streams often broadcast in 4:3, letterboxed 16:9, or stretched formats. The current player hardcodes native aspect ratio with no user override, leading to black bars or distorted displays on widescreen 4K/8K TVs.
+  </div>
+  <div class="grid-two">
+    <div class="col-half">
+      <strong>Aspect Ratio Modes Needed:</strong>
+      <ul>
+        <li><strong>Auto / Original:</strong> Default video aspect ratio.</li>
+        <li><strong>16:9 Widescreen:</strong> Force 16:9 proportion.</li>
+        <li><strong>4:3 Classic:</strong> Standard definition format.</li>
+        <li><strong>Fill / Stretch:</strong> Stretch to entire TV display boundary.</li>
+        <li><strong>Zoom / Crop:</strong> Crop vertical bars while preserving aspect ratio.</li>
+      </ul>
+    </div>
+    <div class="col-half">
+      <strong>Remote Shortcut:</strong>
+      <ul>
+        <li>Cycle through aspect modes instantly via Remote Blue button or player settings menu.</li>
+        <li>Persist user's preference in <code>SharedPreferences</code> per stream type (Live vs Movie).</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">9. Stream Buffer Resiliency & Auto-Reconnect HUD</span>
+    <span class="badge badge-p1">P1 - Stability</span>
+  </div>
+  <div class="item-desc">
+    IPTV streams suffer from network fluctuations, server throttling, or temporary packet drops. Currently, any stream disruption causes <code>tv.video.dart</code> to silently fail over to <code>kMp4TestUrl</code> (bee.mp4) or throw a black screen error.
+  </div>
+  <div class="grid-two">
+    <div class="col-half">
+      <strong>Flaws in Current Behavior:</strong>
+      <ul>
+        <li>Playing <code>bee.mp4</code> test video confuses end users in production.</li>
+        <li>No auto-retry or stream reconnection loop.</li>
+      </ul>
+    </div>
+    <div class="col-half">
+      <strong>Required Solution:</strong>
+      <ul>
+        <li>Implement 5-attempt exponential retry loop with 2s, 4s, 8s intervals.</li>
+        <li>Display semi-transparent HUD: <em>"Reconnecting stream (Attempt 2 of 5)..."</em>.</li>
+        <li>Remove all references to test MP4 video files.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">10. Dynamic Dashboard & "Continue Watching" Row</span>
+    <span class="badge badge-p1">P1 - Core Experience</span>
+  </div>
+  <div class="item-desc">
+    <code>lib/presentation/screen_view/common/tabs/homepage/screens/homepage.dart</code> currently loads static dummy data (<code>onboardingData</code>) and hardcoded <code>_PosterCard()</code> placeholders. It does not display the user's real IPTV content.
+  </div>
+  <div class="grid-two">
+    <div class="col-half">
+      <strong>Required Dashboard Sections:</strong>
+      <ul>
+        <li><strong>Continue Watching:</strong> Movies & Series with saved playback resume progress.</li>
+        <li><strong>Favorite Channels:</strong> Quick 1-click launch row for starred channels.</li>
+        <li><strong>Recently Added Movies:</strong> Real Xtream VOD items sorted by release/added date.</li>
+      </ul>
+    </div>
+    <div class="col-half">
+      <strong>Data Persistence:</strong>
+      <ul>
+        <li>Store resume timestamps in Hive (<code>streamId</code>, <code>positionSeconds</code>, <code>duration</code>).</li>
+        <li>Auto-update row whenever user exits the video player.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE BREAK -->
+<div class="page-break"></div>
+
+<!-- SECTION 4 -->
+<h2>4. Priority P2: Quality of Life & Smart TV Optimizations</h2>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">11. Automated Parental Control (18+ / Adult Lock)</span>
+    <span class="badge badge-p2">P2 - Compliance</span>
+  </div>
+  <div class="item-desc">
+    Auto-scan category names containing keywords (<code>XXX</code>, <code>Adult</code>, <code>18+</code>, <code>For Adults</code>, <code>Erotic</code>) and require the master PIN before revealing channel lists or thumbnails. Provide an option to hide adult categories completely from search.
+  </div>
+</div>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">12. Tizen Memory Optimization & Image Cache Clamping</span>
+    <span class="badge badge-p2">P2 - Performance</span>
+  </div>
+  <div class="item-desc">
+    Samsung Smart TVs commonly have strict 1 GB to 2 GB RAM ceilings. Set <code>PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024</code> (100MB). Wrap channel logos in <code>ResizeImage(..., width: 120, height: 120)</code> to avoid holding uncompressed 1080p bitmaps in RAM.
+  </div>
+</div>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">13. User Profile & Subscription Expiry Hub (`user_profile.dart`)</span>
+    <span class="badge badge-p2">P2 - Missing Screen</span>
+  </div>
+  <div class="item-desc">
+    Replace the 15-line dummy <code>UserProfile</code> screen with an account dashboard showing:
+    Xtream account status, active subscription expiration date, maximum allowed concurrent connections, device MAC address, server hostname, app version, and a "Clear App Cache" button.
+  </div>
+</div>
+
+<div class="item-card">
+  <div class="item-header">
+    <span class="item-title">14. Codebase Hygiene & Redundant File Pruning</span>
+    <span class="badge badge-p2">P2 - Code Quality</span>
+  </div>
+  <div class="item-desc">
+    Several architectural remnants clutter the codebase:
+    <ul>
+      <li><strong>Duplicate Series Screen:</strong> <code>lib/series/series.details.dart</code> (46 KB) is an obsolete duplicate of <code>serie.details.dart</code> (57 KB) and must be deleted.</li>
+      <li><strong>Unused GPS File:</strong> <code>lib/location.dart</code> imports geolocator packages that are meaningless on Smart TVs.</li>
+      <li><strong>Portrait Lock in TV Code:</strong> Remove <code>DeviceOrientation.portraitDown/Up</code> in <code>favourite_list.dart:58</code> which risks breaking landscape mode on TV displays.</li>
+      <li><strong>Repeated Import Blocks:</strong> Deduplicate import blocks in <code>content_option_tv.dart</code> and <code>fetch_phone_info_mac.dart</code>.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SECTION 5 -->
+<h2>5. Phased Implementation Roadmap</h2>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Phase</th>
+      <th>Deliverables</th>
+      <th>Target Timeline</th>
+      <th>Priority</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Phase 1: Critical Fixes & Security Hardening</strong></td>
+      <td>
+        • Bind real user inputs in upload playlist screens (eliminate leaked credentials)<br>
+        • Reroute favorites playback to <code>VideoPlayerScreen</code> (remove BetterPlayer crash)<br>
+        • Enforce landscape mode in <code>favourite_list.dart</code> and delete duplicate <code>series.details.dart</code><br>
+        • Remove <code>kMp4TestUrl</code> fallback and add reconnect HUD
+      </td>
+      <td>Days 1 - 3</td>
+      <td><span class="badge badge-p0">Immediate</span></td>
+    </tr>
+    <tr>
+      <td><strong>Phase 2: TV Remote UX & Playback Controls</strong></td>
+      <td>
+        • Implement 0-9 numeric channel keypad zapping with top-right channel HUD<br>
+        • Map TV remote Channel +/- and Info keys to player overlay<br>
+        • Implement Multi-Audio track selector and Subtitle track selector OSD dialogs<br>
+        • Implement Aspect Ratio toggle (Auto, 16:9, 4:3, Fill, Zoom) via Remote Blue button
+      </td>
+      <td>Days 4 - 8</td>
+      <td><span class="badge badge-p1">Sprint 2</span></td>
+    </tr>
+    <tr>
+      <td><strong>Phase 3: EPG, Search & Dynamic Dashboard</strong></td>
+      <td>
+        • Integrate Xtream EPG API into <code>ApiRepo</code> and build live 24-hour TV Guide grid<br>
+        • Build full <code>SearchScreen</code> with virtual TV keyboard and unified search results<br>
+        • Wire real Xtream data into <code>Homepage</code> (Continue Watching, Recently Added, Favorites)<br>
+        • Build <code>UserProfile</code> screen displaying subscription info, MAC, and connection limit
+      </td>
+      <td>Days 9 - 14</td>
+      <td><span class="badge badge-p1">Sprint 3</span></td>
+    </tr>
+    <tr>
+      <td><strong>Phase 4: PlayReady DRM & Store Certification</strong></td>
+      <td>
+        • Implement Tizen AVPlay native DRM plugin for PlayReady & Widevine license handshakes<br>
+        • Clamp image cache to 100MB to guarantee zero OOM terminations on 1GB Tizen TVs<br>
+        • Complete Samsung Smart TV App Store submission checklist and packaging
+      </td>
+      <td>Days 15 - 20</td>
+      <td><span class="badge badge-p2">Sprint 4</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="footer-box">
+  <strong>WisePlayer Tizen TV Roadmap Report</strong> — Generated via comprehensive static analysis and architectural review. File saved at: <code>c:\Users\Pearl - Admin\wiseplayertizen\WisePlayer_Tizen_Pending_Work_and_Roadmap.pdf</code>
+</div>
+
+</body>
+</html>

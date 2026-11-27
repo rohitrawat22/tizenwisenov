@@ -320,8 +320,8 @@ class _UploadPlaylistState extends State<UploadPlaylist>
       setState(() => _isUploading = true);
       final res = await apiService.hitPostApi(
         reqData: {
-          "name": "mac1",
-          "m3uUrl": "https://iptv-org.github.io/iptv/categories/news.m3u",
+          "name": "new",
+          "m3uUrl": "http://munich48718.wd.business-cloud-8.ru/get.php?username=22e69cd74847&password=69869ef8a5&type=m3u_plus&output=ts",
         },
         endpoint: "/api/playlist/m3u",
       );

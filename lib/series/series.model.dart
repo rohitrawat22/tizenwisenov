@@ -138,30 +138,160 @@ class SeriesDetailModel {
                 ..sort(
                   (a, b) => (a.episodeNum ?? 0).compareTo(b.episodeNum ?? 0),
                 );
+        } else if (value is Map) {
+          episodesMap[key.toString()] =
+              value.values
+                  .whereType<Map<String, dynamic>>()
+                  .map((e) => SeriesEpisode.fromJson(e))
+                  .toList()
+                ..sort(
+                  (a, b) => (a.episodeNum ?? 0).compareTo(b.episodeNum ?? 0),
+                );
         }
       });
+    } else if (episodesRaw is List) {
+      episodesMap['1'] =
+          episodesRaw
+              .whereType<Map<String, dynamic>>()
+              .map((e) => SeriesEpisode.fromJson(e))
+              .toList()
+            ..sort((a, b) => (a.episodeNum ?? 0).compareTo(b.episodeNum ?? 0));
+    }
+
+    // Parse seasons (safely supporting both JSON List and JSON Map from Xtream API)
+    List<SeriesSeason> seasonsList = [];
+    final seasonsRaw = json['seasons'];
+    if (seasonsRaw is List) {
+      seasonsList = seasonsRaw
+          .whereType<Map<String, dynamic>>()
+          .map((e) => SeriesSeason.fromJson(e))
+          .toList();
+    } else if (seasonsRaw is Map) {
+      seasonsList = seasonsRaw.values
+          .whereType<Map<String, dynamic>>()
+          .map((e) => SeriesSeason.fromJson(e))
+          .toList();
+    }
+
+    // FIX: If seasons is 0/empty but episodes has values, auto-generate seasons from episodes
+    if (seasonsList.isEmpty && episodesMap.isNotEmpty) {
+      final List<SeriesSeason> generatedSeasons = [];
+      final sortedKeys = episodesMap.keys.toList()
+        ..sort((a, b) {
+          final intA = int.tryParse(a.replaceAll(RegExp(r'\D'), '')) ?? 0;
+          final intB = int.tryParse(b.replaceAll(RegExp(r'\D'), '')) ?? 0;
+          if (intA != intB) return intA.compareTo(intB);
+          return a.compareTo(b);
+        });
+
+      for (int i = 0; i < sortedKeys.length; i++) {
+        final key = sortedKeys[i];
+        final eps = episodesMap[key] ?? [];
+        final parsedNum = int.tryParse(key.replaceAll(RegExp(r'\D'), ''));
+
+        int seasonNum;
+        if (parsedNum != null && parsedNum > 0) {
+          seasonNum = parsedNum;
+        } else {
+          final epWithSeason = eps.firstWhere(
+            (e) => e.season != null && e.season! > 0,
+            orElse: () => const SeriesEpisode(),
+          );
+          seasonNum = epWithSeason.season ?? (i + 1);
+        }
+
+        final firstCover = eps.isNotEmpty
+            ? (eps.first.info.movieImage ?? eps.first.directSource)
+            : null;
+
+        generatedSeasons.add(
+          SeriesSeason(
+            name: 'Season $seasonNum',
+            seasonNumber: seasonNum,
+            episodeCount: eps.length,
+            cover: firstCover,
+          ),
+        );
+      }
+
+      seasonsList = generatedSeasons;
+    } else if (seasonsList.isNotEmpty && episodesMap.isNotEmpty) {
+      // Ensure episodeCount is populated accurately for each season
+      for (int i = 0; i < seasonsList.length; i++) {
+        final s = seasonsList[i];
+        final sNum = s.seasonNumber ?? (i + 1);
+        final matchingEps =
+            episodesMap[sNum.toString()] ??
+            episodesMap[s.name?.replaceAll(RegExp(r'\D'), '') ?? ''] ??
+            (i < episodesMap.length
+                ? episodesMap[episodesMap.keys.elementAt(i)]
+                : null);
+
+        if ((s.episodeCount == null || s.episodeCount == 0) &&
+            matchingEps != null &&
+            matchingEps.isNotEmpty) {
+          seasonsList[i] = SeriesSeason(
+            name: s.name,
+            episodeCount: matchingEps.length,
+            overview: s.overview,
+            airDate: s.airDate,
+            cover: s.cover,
+            coverTmdb: s.coverTmdb,
+            seasonNumber: sNum,
+            coverBig: s.coverBig,
+            duration: s.duration,
+          );
+        }
+      }
     }
 
     return SeriesDetailModel(
       info: SeriesInfo.fromJson(
         (json['info'] is Map<String, dynamic>) ? json['info'] : const {},
       ),
-      seasons: (json['seasons'] is List)
-          ? (json['seasons'] as List)
-                .whereType<Map<String, dynamic>>()
-                .map((e) => SeriesSeason.fromJson(e))
-                .toList()
-          : const [],
+      seasons: seasonsList,
       episodes: episodesMap,
     );
   }
 
   /// Episodes for a given season number, safe against missing keys.
   List<SeriesEpisode> episodesForSeason(int seasonNumber) {
-    return episodes[seasonNumber.toString()] ?? const [];
+    if (episodes.containsKey(seasonNumber.toString())) {
+      return episodes[seasonNumber.toString()]!;
+    }
+    for (final entry in episodes.entries) {
+      final keyDigits = entry.key.replaceAll(RegExp(r'\D'), '');
+      if (keyDigits.isNotEmpty && int.tryParse(keyDigits) == seasonNumber) {
+        return entry.value;
+      }
+    }
+    // Also check if any episode in the lists has season == seasonNumber
+    for (final entry in episodes.entries) {
+      final matching = entry.value
+          .where((e) => e.season == seasonNumber)
+          .toList();
+      if (matching.isNotEmpty) {
+        return matching;
+      }
+    }
+    return const [];
   }
 
-  int get totalSeasons => seasons.length;
+  /// Returns all available episodes across all seasons/keys, sorted by episode number.
+  List<SeriesEpisode> get allEpisodes {
+    final list = episodes.values.expand((e) => e).toList();
+    list.sort((a, b) {
+      final sA = a.season ?? 0;
+      final sB = b.season ?? 0;
+      if (sA != sB) return sA.compareTo(sB);
+      return (a.episodeNum ?? 0).compareTo(b.episodeNum ?? 0);
+    });
+    return list;
+  }
+
+  int get totalSeasons => seasons.isNotEmpty
+      ? seasons.length
+      : (episodes.isNotEmpty ? episodes.keys.length : 0);
 
   int get totalEpisodes =>
       episodes.values.fold(0, (sum, list) => sum + list.length);

@@ -341,11 +341,22 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen>
 
   List<SeriesEpisode> get _currentEpisodes {
     final detail = _detail;
-    if (detail == null || detail.seasons.isEmpty) return const [];
-    final selectedSeason = detail.seasons[_selectedSeasonIndex];
+    if (detail == null) return const [];
+    if (detail.seasons.isEmpty) {
+      if (detail.episodes.isNotEmpty) {
+        return detail.allEpisodes;
+      }
+      return const [];
+    }
+    final safeIndex = _selectedSeasonIndex.clamp(0, detail.seasons.length - 1);
+    final selectedSeason = detail.seasons[safeIndex];
     final seasonNumber =
-        selectedSeason.seasonNumber ?? (_selectedSeasonIndex + 1);
-    return detail.episodesForSeason(seasonNumber);
+        selectedSeason.seasonNumber ?? (safeIndex + 1);
+    var eps = detail.episodesForSeason(seasonNumber);
+    if (eps.isEmpty && detail.episodes.isNotEmpty) {
+      eps = detail.allEpisodes;
+    }
+    return eps;
   }
 
   void _buildSeasonFocusNodes() {
@@ -585,7 +596,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen>
         ),
         if (detail.seasons.isNotEmpty)
           SliverToBoxAdapter(child: _buildSeasonSelector(detail, horizontalPad))
-        else
+        else if (detail.totalEpisodes == 0)
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.all(16),
@@ -965,7 +976,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen>
   }
 
   Widget _buildEpisodeSection(SeriesDetailModel detail, double horizontalPad) {
-    if (detail.seasons.isEmpty) {
+    if (detail.seasons.isEmpty && detail.totalEpisodes == 0) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
 
